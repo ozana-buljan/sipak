@@ -90,6 +90,15 @@ a { color: var(--garnet); }
 .notice { background: var(--warn-soft); color: var(--warn); border-radius: 12px; padding: 10px 14px; font-size: .92rem; }
 .rules { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
 .foot { text-align: center; }
+.rangebar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--paper); padding-block: 8px; }
+.seg { appearance: none; border: 1.5px solid var(--line); background: var(--card); color: var(--ink); border-radius: 99px; padding: 7px 14px; font: 700 .92rem var(--f-body); cursor: pointer; min-height: 38px; }
+.seg[aria-pressed="true"] { background: var(--garnet); border-color: var(--garnet); color: #fff; }
+.weekhead { margin-top: 4px; color: var(--muted); font-size: .95rem; }
+.day summary { display: flex; flex-direction: column; gap: 8px; list-style: none; }
+.day summary::-webkit-details-marker { display: none; }
+.day summary::after { content: "Prikaži zadatke ▾"; font-size: .85rem; color: var(--garnet); font-weight: 700; }
+.day[open] summary::after { content: "Sakrij zadatke ▴"; }
+.day-m { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: .9rem; color: var(--muted); }
 .zr { gap: 16px; }
 .zr-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
 .zr-big { font-size: 1.1rem; }
@@ -617,6 +626,11 @@ function rewardsView() {
 }
 
 /* ---------- parent view ---------- */
+const RANGES = { today: "Danas", week: "Ovaj tjedan", all: "Sve" };
+let range = "week";
+try { const r = localStorage.getItem("sipak.range"); if (RANGES[r]) range = r; } catch (_) {}
+function rangeStart(r) { const d = new Date(); if (r === "today") return key(d); if (r === "week") { d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return key(d); } return "0000-00-00"; }
+function weekLabel(monKey) { const [y, m, d] = monKey.split("-").map(Number); const a = new Date(y, m - 1, d), b = new Date(y, m - 1, d + 6); return `Tjedan ${a.getDate()}. ${a.getMonth() + 1}. – ${b.getDate()}. ${b.getMonth() + 1}.`; }
 function parent() {
   const today = new Date(), k = key(today);
   const t = sessions.find(s => s.date === k && s.kind !== "extra");
@@ -626,7 +640,9 @@ function parent() {
   const doneBaseline = sessions.filter(s => s.kind === "baseline" && s.completed).length;
   const doneSet = new Set(sessions.filter(s => s.completed).map(s => s.date));
 
-  const main = sessions.flatMap(s => s.answers.filter(a => !a.ladderOf));
+  const from = rangeStart(range);
+  const inRange = sessions.filter(s => s.date >= from);
+  const main = inRange.flatMap(s => s.answers.filter(a => !a.ladderOf).map(a => ({ ...a, date: s.date })));
   const groups = {};
   for (const a of main) { const c = a.id.match(/^[A-Z]/)[0]; (groups[c] ||= []).push(a); }
   const stats = Object.keys(CAT).filter(c => groups[c]).map(c => {
@@ -634,17 +650,9 @@ function parent() {
     return `<div class="stat"><span class="cat">${esc(CAT[c])}</span><span class="num">${ok}/${g.length} točno${sk ? ` · ${sk} preskočeno` : ""}</span><span class="num muted small">medijan ${secs(median(g.map(a => a.ms)))}</span></div>`;
   }).join("");
   const slow = main.filter(a => a.correct).sort((a, b) => b.ms - a.ms).slice(0, 5);
-  const wrong = main.filter(a => !a.correct);
+  const wrong = main.filter(a => !a.correct).sort((a, b) => b.date.localeCompare(a.date));
 
-  const sessHtml = [...sessions].sort((a, b) => b.date.localeCompare(a.date)).map(s => {
-    const rows = s.answers.map(a => `<tr class="${a.ladderOf ? "lad" : ""}"><td>${esc(a.prompt).replace(/\n/g," ")}</td><td>${esc(a.answer)}</td><td>${a.skipped ? "–" : esc(a.given)}</td>
-      <td>${a.skipped ? '<span class="pill skip">preskok</span>' : a.correct ? '<span class="pill ok">točno</span>' : '<span class="pill no">netočno</span>'}</td><td>${secs(a.ms)}</td></tr>`).join("");
-    const mood = { 1: "😟 teško", 2: "😐 onako", 3: "😊 dobro" }[s.mood] || "–";
-    return `<details class="card"><summary>${fmtDate(s.date)} · ${s.kind === "bonus" ? "Subotnji bonus" : s.kind === "extra" ? "Bonus zadatak" : `Baseline dan ${s.day}`} ${s.completed ? "" : "(nedovršeno)"}</summary>
-      <p class="small muted">Aktivno vrijeme ${Math.round((s.activeMs||0)/60000)} min · raspoloženje ${mood}${s.pauses?.length ? ` · pauze: ${s.pauses.length} (${Math.round(s.pauses.reduce((a, x) => a + x.ms, 0) / 60000)} min, od toga ${s.pauses.filter(x => x.auto).length} automatski)` : ""}</p>
-      ${s.photos?.length ? `<div class="thumbs">${s.photos.map(photoTag).join("")}</div>` : `<p class="small muted">Bez fotke.</p>`}
-      <div class="tablebox"><table><thead><tr><th>Zadatak</th><th>Točno</th><th>Lara</th><th>Ishod</th><th>Vrijeme</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
-  }).join("");
+
 
   app.innerHTML = `<div class="topbar"><div class="brand">${LOGO}<span>Šipak</span></div><a href="#" id="toLara">Larin prikaz</a></div>
     ${offline ? `<div class="notice">Spremanje trenutno ne radi.</div>` : ""}
@@ -652,11 +660,13 @@ function parent() {
     <div class="card"><div class="status"><span class="dot" style="background:${status[0]}"></span><div><h3>${status[1]}</h3>${status[2] ? `<p class="small muted">${status[2]}</p>` : ""}</div></div>
       <p class="small">Baseline: ${doneBaseline} od ${DAYS.length} dana · niz: ${computeStreak(doneSet, today)} ${computeStreak(doneSet, today) === 1 ? "dan" : "dana"}</p></div>
     ${parentRewards()}
-    <div class="card"><h3>Po kategorijama</h3>${stats ? `<div class="stat-grid">${stats}</div>` : `<p class="muted">Rezultati će se pojaviti nakon prvog dana.</p>`}
+    <div class="rangebar" role="group" aria-label="Razdoblje"><span class="small muted">Rezultati za:</span>${Object.entries(RANGES).map(([k, v]) => `<button class="seg" data-range="${k}" aria-pressed="${k === range}">${v}</button>`).join("")}</div>
+    <div class="card"><h3>Po kategorijama</h3>${stats ? `<div class="stat-grid">${stats}</div>` : `<p class="muted">${range === "today" ? "Danas još nema riješenih zadataka." : range === "week" ? "Ovaj tjedan još nema riješenih zadataka." : "Rezultati će se pojaviti nakon prvog dana."}</p>`}
       <p class="small muted">Vrijeme Lara ne vidi. Ciljevi se postavljaju nakon cijelog baselinea.</p></div>
-    ${wrong.length ? `<div class="card"><h3>Netočno ili preskočeno</h3><div class="tablebox"><table><thead><tr><th>Zadatak</th><th>Točno</th><th>Lara</th><th>Vrijeme</th></tr></thead><tbody>${wrong.map(a => `<tr><td>${esc(a.prompt).replace(/\n/g," ")}</td><td>${esc(a.answer)}</td><td>${a.skipped ? "preskok" : esc(a.given)}</td><td>${secs(a.ms)}</td></tr>`).join("")}</tbody></table></div></div>` : ""}
+    ${wrong.length ? `<div class="card"><h3>Netočno ili preskočeno</h3><div class="tablebox"><table><thead><tr>${range !== "today" ? "<th>Dan</th>" : ""}<th>Zadatak</th><th>Točno</th><th>Lara</th><th>Vrijeme</th></tr></thead><tbody>${wrong.map(a => `<tr>${range !== "today" ? `<td>${fmtDate(a.date).replace(/^\S+ /, "")}</td>` : ""}<td>${esc(a.prompt).replace(/\n/g," ")}</td><td>${esc(a.answer)}</td><td>${a.skipped ? "preskok" : esc(a.given)}</td><td>${secs(a.ms)}</td></tr>`).join("")}</tbody></table></div></div>` : ""}
     ${slow.length ? `<div class="card"><h3>Najsporiji točni odgovori</h3><div class="tablebox"><table><tbody>${slow.map(a => `<tr><td>${esc(a.prompt).replace(/\n/g," ")} = ${esc(a.answer)}</td><td>${secs(a.ms)}</td></tr>`).join("")}</tbody></table></div></div>` : ""}
-    <div><h2>Dani</h2></div>${sessHtml || `<p class="muted">Još nema riješenih dana.</p>`}`;
+    <p class="foot"><a href="#dani">Svi dani, zadatak po zadatak →</a></p>`;
+  app.querySelectorAll("[data-range]").forEach(b => b.onclick = () => { range = b.dataset.range; try { localStorage.setItem("sipak.range", range); } catch (_) {} parent(); });
   $("#toLara").onclick = e => { e.preventDefault(); location.hash = ""; };
   app.querySelectorAll("[data-used]").forEach(b => b.onclick = async () => {
     const r = requests.find(x => x.id === b.dataset.used); if (!r) return;
@@ -704,8 +714,32 @@ function parentHistory() {
     </div></div>`;
 }
 
+function dayCard(s, open) {
+  const main = s.answers.filter(a => !a.ladderOf), ok = main.filter(a => a.correct).length, sk = main.filter(a => a.skipped).length;
+  const mood = { 1: "😟 teško", 2: "😐 onako", 3: "😊 dobro" }[s.mood];
+  const kind = s.kind === "bonus" ? "Subotnji bonus" : s.kind === "extra" ? "Bonus zadatak" : `Baseline dan ${s.day}`;
+  const pauseMs = (s.pauses || []).reduce((a, x) => a + x.ms, 0);
+  const groups = {};
+  for (const a of main) { const c = a.id.match(/^[A-Z]/)[0]; (groups[c] ||= []).push(a); }
+  const cats = Object.keys(CAT).filter(c => groups[c]).map(c => { const g = groups[c];
+    return `<div class="stat"><span class="cat">${esc(CAT[c])}</span><span class="num">${g.filter(a => a.correct).length}/${g.length} točno${g.some(a => a.skipped) ? ` · ${g.filter(a => a.skipped).length} preskočeno` : ""}</span><span class="num muted small">medijan ${secs(median(g.map(a => a.ms)))}</span></div>`; }).join("");
+  const rows = s.answers.map(a => `<tr class="${a.ladderOf ? "lad" : ""}"><td>${esc(a.prompt).replace(/\n/g, " ")}</td><td>${esc(a.answer)}</td><td>${a.skipped ? "–" : esc(a.given)}</td>
+    <td>${a.skipped ? '<span class="pill skip">preskok</span>' : a.correct ? '<span class="pill ok">točno</span>' : '<span class="pill no">netočno</span>'}</td><td>${secs(a.ms)}</td></tr>`).join("");
+  return `<details class="card day" ${open ? "open" : ""}><summary><span class="day-t"><b>${fmtDate(s.date)}</b> · ${kind}${s.completed ? "" : ' <span class="pill skip">nedovršeno</span>'}</span>
+      <span class="day-m"><span class="pill ${ok === main.length ? "ok" : "no"}">${ok}/${main.length} točno</span>${sk ? `<span class="pill skip">${sk} preskočeno</span>` : ""}<span>${Math.max(1, Math.round((s.activeMs || 0) / 60000))} min</span>${mood ? `<span>${mood}</span>` : ""}${s.pauses?.length ? `<span>${s.pauses.length} ${s.pauses.length === 1 ? "pauza" : "pauze"}</span>` : ""}${s.photos?.length ? `<span>${s.photos.length === 1 ? "1 fotka" : s.photos.length + " fotke"}</span>` : ""}</span></summary>
+    ${cats ? `<div class="stat-grid">${cats}</div>` : ""}
+    ${s.pauses?.length ? `<p class="small muted">Pauze: ${s.pauses.length}, ukupno ${Math.round(pauseMs / 60000)} min, od toga ${s.pauses.filter(x => x.auto).length} automatski (izlazak iz appa)</p>` : ""}
+    ${s.photos?.length ? `<div class="thumbs">${s.photos.map(photoTag).join("")}</div>` : `<p class="small muted">Bez fotke.</p>`}
+    <div class="tablebox"><table><thead><tr><th>Zadatak</th><th>Točno</th><th>Lara</th><th>Ishod</th><th>Vrijeme</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+}
+function daysView() {
+  const list = [...sessions].sort((a, b) => b.date.localeCompare(a.date) || (a.kind === "extra" ? 1 : -1));
+  let lastWeek = "", html = "";
+  list.forEach((s, i) => { const wk = key(mondayOf(s.date)); if (wk !== lastWeek) { html += `<h3 class="weekhead">${weekLabel(wk)}</h3>`; lastWeek = wk; } html += dayCard(s, i === 0); });
+  parentShell("#dani", html || `<div class="card"><p class="muted">Još nema riješenih dana.</p></div>`);
+}
 function parentTabs(active) {
-  const t = [["#roditelj", "Pregled"], ["#izvjestaji", `Izvještaji${reports.length ? ` (${reports.length})` : ""}`], ["#opazanja", `Opažanja${observations.length ? ` (${observations.length})` : ""}`]];
+  const t = [["#roditelj", "Pregled"], ["#dani", "Dani"], ["#izvjestaji", `Izvještaji${reports.length ? ` (${reports.length})` : ""}`], ["#opazanja", `Opažanja${observations.length ? ` (${observations.length})` : ""}`]];
   return `<nav class="tabs" aria-label="Roditeljski prikaz">${t.map(([h, l]) => `<a href="${h}" ${h === active ? 'aria-current="page"' : ""}>${l}</a>`).join("")}</nav>`;
 }
 function parentShell(active, inner) {
@@ -821,7 +855,7 @@ function loginView(msg = "") {
 let reports = [], observations = [];
 async function loadAll(table) { if (!db) return []; try { const q = await db.collection(table).get(); return q.docs.map(d => ({ id: d.id, ...d.data() })); } catch (_) { return []; } }
 async function refresh() { [sessions, requests, reports, observations] = await Promise.all([loadSessions(), loadRequests(), loadAll("reports"), loadAll("observations")]); route(); }
-const PARENT_VIEWS = { "#roditelj": () => parent(), "#izvjestaji": () => reportsView(), "#opazanja": () => observationsView() };
+const PARENT_VIEWS = { "#roditelj": () => parent(), "#dani": () => daysView(), "#izvjestaji": () => reportsView(), "#opazanja": () => observationsView() };
 function route() { if (run) return; const v = PARENT_VIEWS[location.hash]; if (v) { unlocked ? v() : pinGate(); } else { unlocked = false; home(); } }
 window.addEventListener("hashchange", () => { if (!run) refresh(); });
 (async () => {
