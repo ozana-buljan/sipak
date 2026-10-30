@@ -83,6 +83,8 @@ a { color: var(--garnet); }
 .notice { background: var(--warn-soft); color: var(--warn); border-radius: 12px; padding: 10px 14px; font-size: .92rem; }
 .rules { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
 .foot { text-align: center; }
+.donecount { font-size: 1.15rem; }
+.donecount b { font-family: var(--f-display); color: var(--garnet); }
 .taskhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .pausebtn { appearance: none; border: 1.5px solid var(--line); background: transparent; color: var(--muted); border-radius: 99px; padding: 6px 14px; font: 700 .9rem var(--f-body); cursor: pointer; min-height: 36px; }
 .modal { position: fixed; inset: 0; z-index: 50; background: var(--paper); display: flex; align-items: center; justify-content: center;
@@ -509,11 +511,18 @@ function moodStep() {
     endStep();
   });
 }
+function doneLine(sess) {
+  const main = sess.answers.filter(x => !x.ladderOf).length, lad = sess.answers.filter(x => x.ladderOf).length;
+  const z = n => n === 1 ? "zadatak" : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? "zadatka" : "zadataka";
+  const q = n => n === 1 ? "kratko pitanje" : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? "kratka pitanja" : "kratkih pitanja";
+  return `Danas si prošla kroz <b>${main}</b> ${z(main)}${lad ? ` i <b>${lad}</b> ${q(lad)}` : ""}.`;
+}
 function endStep() {
   const doneSet = new Set(sessions.filter(s => s.completed).map(s => s.date));
   const streak = computeStreak(doneSet, new Date());
   shell(`<div class="card"><h2>${run.cut ? "Dosta za danas!" : "Gotovo za danas!"}</h2>
     <div class="streak"><b>${streak}</b><span>${streak === 1 ? "dan" : "dana"} zaredom</span></div>${weekStrip(doneSet, new Date())}
+    <p class="donecount">${doneLine(run.s)}</p>
     <p>${run.s.kind === "extra" ? "Bonus je gotov. Još jedno zrno je u košarici!" : "Bravo, Lara! Novo zrno je u košarici."}</p>
     <button class="btn ghost" id="back">Natrag na početak</button></div>`);
   run = null;
