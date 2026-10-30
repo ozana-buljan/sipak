@@ -90,6 +90,39 @@ a { color: var(--garnet); }
 .notice { background: var(--warn-soft); color: var(--warn); border-radius: 12px; padding: 10px 14px; font-size: .92rem; }
 .rules { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
 .foot { text-align: center; }
+.zr { gap: 16px; }
+.zr-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.zr-big { font-size: 1.1rem; }
+.zr-big b { font-family: var(--f-display); font-size: 3rem; line-height: 1; color: var(--garnet); font-variant-numeric: tabular-nums; margin-right: 4px; }
+.zr-earned { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
+.zr-earned .num { font-family: var(--f-display); font-weight: 800; font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.zr-bar { display: flex; height: 14px; border-radius: 99px; overflow: hidden; background: var(--line); }
+.zr-bar i { display: block; height: 100%; }
+.zr-bar .sp, .zr-legend .sp { background: var(--muted); }
+.zr-bar .hd, .zr-legend .hd { background: var(--warn); }
+.zr-bar .fr, .zr-legend .fr { background: var(--seed); }
+.zr-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .9rem; color: var(--muted); }
+.zr-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.zr-legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.zr-legend b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.zr-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { background: var(--paper); border: 1px solid var(--line); border-radius: 99px; padding: 4px 12px; font-size: .88rem; color: var(--muted); }
+.chip b { color: var(--ink); }
+.zr-owed { display: flex; gap: 12px; align-items: center; background: var(--leaf-soft); color: var(--leaf); border-radius: 14px; padding: 12px 14px; }
+.zr-owed > span svg { width: 26px; height: 30px; display: block; }
+.zr-owed p { color: var(--ink); opacity: .8; }
+.zr-head { display: flex; align-items: center; gap: 10px; }
+.zr-req { display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; align-items: center; border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+.zr-req .row { grid-column: 1 / -1; }
+.zr-req .row .btn { min-height: 44px; padding: 8px 14px; font-size: 1rem; }
+.zr-cost { width: 56px; height: 56px; border-radius: 50%; background: var(--seed-soft); color: var(--garnet); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
+.zr-cost b { font-family: var(--f-display); font-size: 1.4rem; }
+.zr-cost span { font-size: .7rem; }
+.hist { display: flex; flex-direction: column; }
+.hist-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.hist-row:last-child { border-bottom: 0; }
+.zr-what { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
 .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); overflow-x: auto; }
 .tabs a { padding: 10px 12px; text-decoration: none; color: var(--muted); font-weight: 700; border-bottom: 3px solid transparent; white-space: nowrap; }
 .tabs a[aria-current="page"] { color: var(--garnet); border-bottom-color: var(--garnet); }
@@ -641,24 +674,34 @@ function parent() {
 function parentRewards() {
   const bal = balance(), e = earnings(sessions);
   const pend = requests.filter(r => r.status === "pending");
-  return `<div class="card"><h3>Zrna i nagrade</h3>
-    <p class="small">Zarađeno ${bal.earned} (dani ${e.days}, bonusi ${e.extras}, puni tjedni ${e.weeks} × 3) · potrošeno ${bal.spent} · na čekanju ${bal.held} · slobodno ${bal.free}</p>
-    ${pend.length ? pend.map(r => `<div class="req"><span>${esc(r.label)} · ${r.cost} ${zrna(r.cost)}<br><span class="small muted">${fmtDate(r.at.slice(0,10))}</span></span>
-      <div class="row"><button class="btn" data-dec="approved" data-id="${r.id}">Odobri</button><button class="btn ghost" data-dec="declined" data-id="${r.id}">Odbij</button></div></div>`).join("") : `<p class="small muted">Nema zahtjeva na čekanju.</p>`}</div>
+  const owed = requests.filter(r => r.status === "approved" && !r.usedAt).reduce((a, r) => a + r.cost * 5, 0);
+  const tot = Math.max(bal.earned, 1), pct = n => (n / tot * 100).toFixed(1);
+  return `<div class="card zr">
+    <div class="zr-top"><div><p class="label">Zrna i nagrade</p><p class="zr-big"><b>${bal.free}</b> ${zrna(bal.free)} slobodno</p><p class="small muted">= ${bal.free * 5} min Minecrafta, ako sve potroši</p></div>
+</div>
+    <p class="small">Od <b>${bal.earned}</b> ${bal.earned === 1 ? "zarađenog zrna" : "zarađenih zrna"}:</p>
+    <div class="zr-bar" role="img" aria-label="Od ${bal.earned} zarađenih zrna: ${bal.spent} potrošeno, ${bal.held} na čekanju, ${bal.free} slobodno">
+      <i class="sp" style="width:${pct(bal.spent)}%"></i><i class="hd" style="width:${pct(bal.held)}%"></i><i class="fr" style="width:${pct(bal.free)}%"></i></div>
+    <div class="zr-legend"><span><i class="sp"></i>Potrošeno <b>${bal.spent}</b></span><span><i class="hd"></i>Na čekanju <b>${bal.held}</b></span><span><i class="fr"></i>Slobodno <b>${bal.free}</b></span></div>
+    <div class="zr-chips"><span class="chip">Riješeni dani <b>${e.days}</b></span><span class="chip">Bonusi <b>${e.extras}</b></span><span class="chip">Puni tjedni <b>${e.weeks}</b> × 3</span></div>
+    ${owed ? `<div class="zr-owed"><span>${seedSvg("done")}</span><div><b>Duguješ ${owed} min Minecrafta</b><p class="small">Odobreno, a još nije odigrano. Označi u tablici ispod kad odigra.</p></div></div>` : ""}
+  </div>
+  <div class="card"><div class="zr-head"><h3>Čeka tvoje odobrenje</h3>${pend.length ? `<span class="pill no">${pend.length}</span>` : ""}</div>
+    ${pend.length ? pend.map(r => `<div class="zr-req"><div class="zr-cost"><b>${r.cost}</b><span>${zrna(r.cost)}</span></div>
+      <div class="zr-what"><b>${esc(r.label)}</b><span class="small muted">zatraženo ${fmtDate(r.at.slice(0, 10))}</span></div>
+      <div class="row"><button class="btn" data-dec="approved" data-id="${r.id}">Odobri</button><button class="btn ghost" data-dec="declined" data-id="${r.id}">Odbij</button></div></div>`).join("")
+      : `<p class="small muted">Nema zahtjeva. Kad Lara zatraži nagradu, pojavit će se ovdje.</p>`}</div>
     ${parentHistory()}`;
 }
 function parentHistory() {
   const hist = requests.filter(r => r.status !== "pending").sort((a, b) => (b.decidedAt || b.at).localeCompare(a.decidedAt || a.at));
   if (!hist.length) return "";
-  const notUsed = hist.filter(r => r.status === "approved" && !r.usedAt);
-  const unusedMin = notUsed.reduce((a, r) => a + r.cost * 5, 0);
-  return `<div class="card"><h3>Iskorištene nagrade</h3>
-    ${notUsed.length ? `<p class="small">Odobreno, a još nije odigrano: ${unusedMin} min</p>` : ""}
-    <div class="tablebox"><table><thead><tr><th>Zatraženo</th><th>Nagrada</th><th>Zrna</th><th>Status</th></tr></thead><tbody>
-    ${hist.map(r => `<tr><td>${fmtDate(r.at.slice(0, 10))}</td><td>${esc(r.label)}</td><td>${r.cost}</td><td>${r.status === "declined" ? '<span class="pill skip">odbijeno</span>'
-      : r.usedAt ? `<span class="pill ok">odigrano ${fmtDate(r.usedAt.slice(0, 10)).replace(/^\S+ /, "")}</span>`
-      : `<button class="btn ghost" data-used="${r.id}" style="min-height:36px;padding:6px 12px;font-size:.9rem">Označi odigrano</button>`}</td></tr>`).join("")}
-    </tbody></table></div></div>`;
+  return `<div class="card"><h3>Povijest nagrada</h3><div class="hist">
+    ${hist.map(r => `<div class="hist-row"><div class="zr-what"><b>${esc(r.label)}</b><span class="small muted">${fmtDate(r.at.slice(0, 10))} · ${r.cost} ${zrna(r.cost)}</span></div>
+      <div>${r.status === "declined" ? '<span class="pill skip">odbijeno</span>'
+        : r.usedAt ? `<span class="pill ok">odigrano ${fmtDate(r.usedAt.slice(0, 10)).replace(/^\S+ /, "")}</span>`
+        : `<button class="btn ghost" data-used="${r.id}" style="min-height:40px;padding:6px 14px;font-size:.92rem">Označi odigrano</button>`}</div></div>`).join("")}
+    </div></div>`;
 }
 
 function parentTabs(active) {
