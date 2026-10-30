@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#A3263A">
+<title>Šipak</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
+<style>
+/* Layout: one-column phone app; one task per screen, big numerals, streak shown as pomegranate seeds. */
+:root {
+  --paper: #FBF6F7; --card: #FFFFFF; --ink: #2A1A1F; --muted: #76606A; --line: #EADCE0;
+  --garnet: #A3263A; --seed: #E14A64; --seed-soft: #F7D3DA; --leaf: #3D7A4C; --leaf-soft: #DCEBDF;
+  --warn: #9A5B00; --warn-soft: #FBEBD2;
+  --f-display: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --f-body: "Atkinson Hyperlegible", "Verdana", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #1A1114; --card: #241A1E; --ink: #F5E9EC; --muted: #B79FA6; --line: #3B2B31;
+  --garnet: #E85A70; --seed: #FF7A90; --seed-soft: #4A2630; --leaf: #7FC290; --leaf-soft: #22352A;
+  --warn: #F2B566; --warn-soft: #3A2C16; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #1A1114; --card: #241A1E; --ink: #F5E9EC; --muted: #B79FA6; --line: #3B2B31;
+  --garnet: #E85A70; --seed: #FF7A90; --seed-soft: #4A2630; --leaf: #7FC290; --leaf-soft: #22352A;
+  --warn: #F2B566; --warn-soft: #3A2C16; color-scheme: dark }
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { min-height: 100%; }
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+body { background: var(--paper); color: var(--ink); font: 17px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px 32px; }
+.wrap { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: 2rem; font-weight: 800; }
+h2 { font-size: 1.45rem; font-weight: 800; }
+h3 { font-size: 1.05rem; font-weight: 600; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.small { font-size: .88rem; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand svg { width: 40px; height: 40px; flex: none; }
+.brand span { font-family: var(--f-display); font-weight: 800; font-size: 1.5rem; color: var(--garnet); }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.btn { appearance: none; border: 0; border-radius: 14px; padding: 16px 20px; font: 700 1.1rem var(--f-body); cursor: pointer;
+  background: var(--garnet); color: #fff; min-height: 56px; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.ghost { background: transparent; color: var(--muted); border: 1.5px solid var(--line); font-weight: 400; font-size: 1rem; }
+.btn:focus-visible, input:focus-visible, .choice:focus-visible, a:focus-visible { outline: 3px solid var(--seed); outline-offset: 2px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.row > .btn { flex: 1 1 140px; }
+a { color: var(--garnet); }
+
+/* week of seeds */
+.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center; }
+.week div { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: .75rem; color: var(--muted); letter-spacing: .04em; }
+.week svg { width: 26px; height: 30px; }
+.streak { display: flex; align-items: baseline; gap: 8px; }
+.streak b { font-family: var(--f-display); font-size: 2.4rem; color: var(--seed); font-variant-numeric: tabular-nums; }
+
+/* task */
+.progress { height: 8px; background: var(--seed-soft); border-radius: 99px; overflow: hidden; }
+.progress i { display: block; height: 100%; background: var(--seed); border-radius: 99px; transition: width .3s; }
+.label { font-size: .8rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.prompt { font-family: var(--f-body); font-weight: 700; font-size: clamp(2.2rem, 11vw, 3.4rem); line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.prompt.long { font-size: clamp(1.3rem, 5.6vw, 1.7rem); line-height: 1.35; }
+.hint { font-size: .95rem; color: var(--muted); }
+.answer { width: 100%; font: 700 2rem var(--f-body); padding: 12px 16px; border-radius: 14px; border: 2px solid var(--line); background: var(--paper); color: var(--ink); font-variant-numeric: tabular-nums; }
+.answer:focus { border-color: var(--seed); outline: none; }
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.choice { appearance: none; border: 2px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 14px; padding: 16px 10px; font: 700 1.25rem var(--f-body); cursor: pointer; min-height: 60px; }
+.saved { text-align: center; font-family: var(--f-display); font-weight: 800; font-size: 1.6rem; color: var(--leaf); padding: 28px 0; }
+.ladder-tag { display: inline-block; align-self: flex-start; background: var(--leaf-soft); color: var(--leaf); border-radius: 99px; padding: 3px 10px; font-size: .82rem; font-weight: 700; }
+.moods { display: flex; gap: 12px; justify-content: center; }
+.moods button { font-size: 2.4rem; background: var(--paper); border: 2px solid var(--line); border-radius: 18px; width: 76px; height: 76px; cursor: pointer; }
+.thumbs { display: flex; gap: 10px; flex-wrap: wrap; }
+.thumbs img { width: 96px; height: 96px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.notice { background: var(--warn-soft); color: var(--warn); border-radius: 12px; padding: 10px 14px; font-size: .92rem; }
+.rules { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+.foot { text-align: center; }
+.basket { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.basket b { font-family: var(--f-display); font-size: 2.4rem; color: var(--garnet); font-variant-numeric: tabular-nums; }
+.reward { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.reward .btn { min-height: 44px; padding: 10px 16px; font-size: 1rem; flex: none; }
+.req { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding: 8px 0; }
+.req .row .btn { min-height: 40px; padding: 8px 14px; font-size: .95rem; flex: none; }
+.foot a { color: var(--muted); font-size: .85rem; }
+
+/* parent */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.stat { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stat .cat { font-weight: 700; }
+.stat .num { font-variant-numeric: tabular-nums; }
+.pill { display: inline-block; border-radius: 99px; padding: 2px 10px; font-size: .82rem; font-weight: 700; }
+.pill.ok { background: var(--leaf-soft); color: var(--leaf); }
+.pill.no { background: var(--seed-soft); color: var(--garnet); }
+.pill.skip { background: var(--warn-soft); color: var(--warn); }
+.tablebox { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: .75rem; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+tr.lad td:first-child { padding-left: 22px; color: var(--muted); }
+details summary { cursor: pointer; font-weight: 700; }
+.status { display: flex; align-items: center; gap: 12px; }
+.status .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="topbar"><div class="brand" id="brand"></div></div>
+  <div class="card"><p class="muted">Učitavam…</p></div>
+</div>
+
+<script>
+/* ---------- content: baseline v1 (from spec "Baseline nacrt") ---------- */
+const N = (id, prompt, answer, extra = {}) => ({ id, type: "num", prompt, answer: String(answer), ...extra });
+const C = (id, prompt, answer, options, extra = {}) => ({ id, type: "choice", prompt, answer, options, ...extra });
+const fact = (id, p, a, ladder) => N(id, p, a, ladder ? { ladder } : {});
+
+const DAYS = [
+  { title: "Zbrajanje do 20 i tablica množenja", items: [
+    fact("A1","8 + 7",15), fact("A2","9 + 5",14), fact("A3","7 + 6",13), fact("A4","14 − 9",5), fact("A5","16 − 8",8), fact("A6","12 − 5",7),
+    fact("B1","7 · 8",56), fact("B2","6 · 9",54), fact("B3","8 · 6",48), fact("B4","9 · 7",63), fact("B5","7 · 7",49), fact("B6","8 · 9",72),
+    fact("B7","6 · 7",42), fact("B8","4 · 8",32), fact("B9","9 · 9",81), fact("B10","3 · 7",21), fact("B11","6 · 6",36), fact("B12","8 · 8",64) ] },
+  { title: "Dijeljenje, mjesne vrijednosti i jedan pisani račun", items: [
+    fact("C1","56 : 7",8), fact("C2","63 : 9",7), fact("C3","48 : 6",8), fact("C4","72 : 8",9), fact("C5","42 : 7",6), fact("C6","54 : 9",6),
+    N("D1","Koja znamenka je na mjestu stotica u broju 58 341?",3,{long:true}),
+    fact("D2","34 · 100",3400), fact("D3","40 · 7",280,[N("D3a","4 · 7",28)]),
+    fact("D4","1 400 : 20",70,[N("D4a","14 : 2",7)]), fact("D5","3 600 : 60",60,[N("D5a","36 : 6",6)]),
+    N("P1","236 · 47",11092,{hint:"Pisani račun: riješi na papiru, upiši samo rezultat."}) ] },
+  { title: "Pisani računi i mjerne jedinice", items: [
+    N("P2","4 536 : 18",252,{hint:"Pisani račun: riješi na papiru, upiši samo rezultat."}),
+    N("P3","9 004 − 3 768",5236,{hint:"Pisani račun: riješi na papiru, upiši samo rezultat."}),
+    N("E1","3 h 15 min = ? min",195,{long:true,ladder:[N("E1a","1 h = ? min",60,{long:true}),N("E1b","3 · 60",180)]}),
+    N("E2","2 kg 40 dag = ? dag",240,{long:true,ladder:[N("E2a","1 kg = ? dag",100,{long:true})]}),
+    N("E3","5 m 3 cm = ? cm",503,{long:true,ladder:[N("E3a","1 m = ? cm",100,{long:true})]}),
+    N("E4","Račun je 37 €, platila si 50 €. Koliko ti se vraća? (u €)",13,{long:true}) ] },
+  { title: "Skupovi, izrazi, kvadrati i prve jednadžbe", items: [
+    C("F1","A = {2, 4, 6, 8}, B = {3, 6, 9}. Koliko je A ∩ B?","{6}",["{6}","{2, 3, 4, 6, 8, 9}","{3, 9}","∅"],{long:true}),
+    N("F2","A = {2, 4, 6, 8}, B = {3, 6, 9}. Koliko elemenata ima A ∪ B?",6,{long:true}),
+    C("F3","A = {2, 4, 6, 8}. Je li 5 ∈ A?","Ne",["Da","Ne"],{long:true}),
+    C("G1","Dvokratnik broja a umanjen za 3","2 · a − 3",["2 · a − 3","2 · (a − 3)","a − 3 · 2","a : 2 − 3"],{long:true}),
+    N("G2","Vrijednost izraza 3 · d + 4 za d = 6",22,{long:true,ladder:[N("G2a","3 · 6",18)]}),
+    C("G3","Pojednostavni: 5x + 3x − x","7x",["7x","8x","9x","7"],{long:true}),
+    N("H1","7²",49), N("H2","3² + 4²",25,{ladder:[N("H2a","4²",16)]}),
+    N("I1","x + 38 = 95\nx = ?",57,{ladder:[C("I1a","Nepoznati pribrojnik dobijemo ovako:","95 − 38",["95 − 38","95 + 38"],{long:true}),N("I1b","95 − 38",57)]}),
+    N("I2","120 − x = 45\nx = ?",75,{ladder:[C("I2a","Nepoznati umanjitelj dobijemo ovako:","120 − 45",["120 − 45","120 + 45"],{long:true}),N("I2b","120 − 45",75)]}),
+    N("I3","8 · x = 72\nx = ?",9,{ladder:[C("I3a","Nepoznati faktor dobijemo ovako:","72 : 8",["72 : 8","72 · 8"],{long:true}),N("I3b","72 : 8",9)]}) ] },
+  { title: "Jednadžbe i nejednadžbe", items: [
+    N("I4","x : 7 = 9\nx = ?",63,{ladder:[C("I4a","Nepoznati djeljenik dobijemo ovako:","9 · 7",["9 · 7","9 : 7"],{long:true}),N("I4b","9 · 7",63)]}),
+    N("I5","84 : x = 12\nx = ?",7,{ladder:[C("I5a","Nepoznati djelitelj dobijemo ovako:","84 : 12",["84 : 12","84 · 12"],{long:true}),N("I5b","84 : 12",7)]}),
+    N("I6","2 · x + 7 = 25\nx = ?",9,{ladder:[N("I6a","2 · x + 7 = 25\nKoliko je 2 · x?",18,{long:true}),N("I6b","18 : 2",9)]}),
+    N("I7","180 : (x : 4) = 20\nx = ?",36,{ladder:[N("I7a","180 : (x : 4) = 20\nKoliko je x : 4?",9,{long:true}),N("I7b","9 · 4",36)]}),
+    N("J1","Koji je najveći prirodni broj x za koji vrijedi 3 · x < 20?",6,{long:true}),
+    N("J2","Koliko brojeva iz N₀ zadovoljava x + 4 < 9?",5,{long:true}) ] }
+];
+const CAT = { A:"Zbrajanje i oduzimanje do 20", B:"Tablica množenja", C:"Tablica dijeljenja", D:"Mjesne vrijednosti, ·/: s 10 i 100",
+  P:"Pisani računi", E:"Mjerne jedinice i novac", F:"Skupovi", G:"Algebarski izrazi", H:"Kvadrati", I:"Jednadžbe", J:"Nejednadžbe", X:"Bonus" };
+const zrna = n => (n % 10 === 1 && n % 100 !== 11) ? "zrno" : "zrna";
+
+function bonusItems() {
+  const pairs = []; const seen = new Set();
+  while (pairs.length < 5) { const a = 6 + Math.floor(Math.random() * 4), b = 3 + Math.floor(Math.random() * 7), k = a + "x" + b;
+    if (!seen.has(k)) { seen.add(k); pairs.push(N("X" + (pairs.length + 1), `${a} · ${b}`, a * b)); } }
+  return pairs;
+}
+
+/* ---------- helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const key = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const norm = s => String(s).replace(/[\s.]/g, "").replace(",", ".").toLowerCase();
+const DAYNAMES = ["NED","PON","UTO","SRI","ČET","PET","SUB"];
+const median = a => { if (!a.length) return null; const s = [...a].sort((x,y)=>x-y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2; };
+const secs = ms => ms == null ? "–" : (ms / 1000).toFixed(1).replace(".", ",") + " s";
+const fmtDate = k => { const [y,m,d] = k.split("-").map(Number); const dt = new Date(y, m-1, d); return `${DAYNAMES[dt.getDay()].charAt(0)+DAYNAMES[dt.getDay()].slice(1).toLowerCase()} ${d}. ${m}.`; };
+
+const LOGO = `<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M15 7 l2 4 3-5 3 5 2-4 1 6 h-12z" fill="var(--leaf)"/><circle cx="20" cy="23" r="14" fill="var(--garnet)"/><g fill="var(--seed-soft)"><ellipse cx="15" cy="21" rx="2.2" ry="2.8"/><ellipse cx="21" cy="19" rx="2.2" ry="2.8"/><ellipse cx="25" cy="25" rx="2.2" ry="2.8"/><ellipse cx="18" cy="27" rx="2.2" ry="2.8"/></g></svg>`;
+const seedSvg = (state) => {
+  if (state === "rest") return `<svg viewBox="0 0 26 30" aria-hidden="true"><path d="M13 4c6 6 8 12 0 22C5 16 7 10 13 4z" fill="var(--leaf-soft)" stroke="var(--leaf)" stroke-width="1.5"/></svg>`;
+  const fill = state === "done" ? "var(--seed)" : "transparent";
+  return `<svg viewBox="0 0 26 30" aria-hidden="true"><path d="M13 3c7 5 9 12 7 17a7.5 7.5 0 0 1-14 0C4 15 6 8 13 3z" fill="${fill}" stroke="var(--seed)" stroke-width="1.6" ${state==="today"?'stroke-dasharray="3 2.5"':''}/></svg>`;
+};
+
+/* ---------- Supabase backend (fetch only, no library) ---------- */
+const SB_URL = "https://ribwckuhmkzndztdkcss.supabase.co";
+const SB_KEY = "sb_publishable_m_iPP9xFgxGR1TZBSr698g_9SHrEO34";
+const LS_KEY = "sipak.auth";
+const auth = { access: null, refresh: null, exp: 0 };
+try { auth.refresh = localStorage.getItem(LS_KEY); } catch (_) {}
+function keepAuth(j) {
+  auth.access = j.access_token; auth.refresh = j.refresh_token; auth.exp = Date.now() + (j.expires_in || 3600) * 1000;
+  try { localStorage.setItem(LS_KEY, auth.refresh); } catch (_) {}
+}
+async function authCall(grant, body) {
+  const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=${grant}`, { method: "POST", headers: { apikey: SB_KEY, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) throw { code: r.status === 400 || r.status === 401 ? "bad_login" : "unavailable" };
+  keepAuth(await r.json());
+}
+async function signIn(email, password) { await authCall("password", { email, password }); }
+async function token() {
+  if (auth.access && Date.now() < auth.exp - 60000) return auth.access;
+  if (!auth.refresh) throw { code: "login" };
+  try { await authCall("refresh_token", { refresh_token: auth.refresh }); }
+  catch (e) { if (e.code === "bad_login") { auth.refresh = null; try { localStorage.removeItem(LS_KEY); } catch (_) {} throw { code: "login" }; } throw e; }
+  return auth.access;
+}
+async function sb(path, opts = {}, retried = false) {
+  const t = await token();
+  const r = await fetch(SB_URL + path, { ...opts, headers: { apikey: SB_KEY, Authorization: "Bearer " + t, ...(opts.headers || {}) } });
+  if (r.status === 401 && !retried) { auth.access = null; return sb(path, opts, true); }
+  if (!r.ok) throw { code: "unavailable", status: r.status };
+  return r;
+}
+const sbdb = {
+  doc(path) { const [table, id] = path.split("/"); return {
+    async set(data) { await sb(`/rest/v1/${table}`, { method: "POST", headers: { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ id, data, updated_at: new Date().toISOString() }) }); },
+    async get() { const a = await (await sb(`/rest/v1/${table}?id=eq.${encodeURIComponent(id)}&select=data`)).json(); return { exists: a.length > 0, data: () => a[0] && a[0].data }; } }; },
+  collection(table) { return { async get() { const a = await (await sb(`/rest/v1/${table}?select=id,data`)).json(); return { docs: a.map(x => ({ id: x.id, data: () => x.data })) }; } }; }
+};
+const sbassets = { async upload(blob) {
+  const path = `${key(new Date())}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}.jpg`;
+  await sb(`/storage/v1/object/photos/${path}`, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: blob });
+  return { id: path }; } };
+const photoCache = new Map();
+async function photoUrl(path) {
+  if (!photoCache.has(path)) photoCache.set(path, sb(`/storage/v1/object/authenticated/photos/${path}`).then(r => r.blob()).then(b => URL.createObjectURL(b)).catch(() => null));
+  return photoCache.get(path);
+}
+const photoTag = p => `<img data-photo="${esc(p)}" alt="Fotka papira">`;
+new MutationObserver(() => {
+  document.querySelectorAll("img[data-photo]:not([src])").forEach(async img => { const u = await photoUrl(img.dataset.photo); if (u) { img.src = u; img.onclick = () => window.open(u, "_blank"); img.style.cursor = "zoom-in"; } });
+}).observe(document.getElementById("app"), { childList: true, subtree: true });
+
+/* ---------- store ---------- */
+let db = null, assets = null, offline = false;
+const mem = new Map();
+let writeChain = Promise.resolve();
+function saveSession(s) {
+  const body = JSON.parse(JSON.stringify(s));
+  writeChain = writeChain.then(async () => {
+    if (!db) { mem.set(s.id, body); return; }
+    try { await db.doc("sessions/" + s.id).set(body); }
+    catch (e) { if (e && e.code === "unavailable") { await new Promise(r => setTimeout(r, 800 + Math.random() * 700)); try { await db.doc("sessions/" + s.id).set(body); } catch (_) { offline = true; } } else offline = true; }
+  });
+  return writeChain;
+}
+async function loadSessions() {
+  if (!db) return [...mem.values()];
+  try { const q = await db.collection("sessions").get(); return q.docs.map(d => d.data()); }
+  catch (e) { offline = true; return [...mem.values()]; }
+}
+
+/* ---------- streak ---------- */
+function computeStreak(doneSet, today) {
+  let n = 0; const d = new Date(today);
+  if (!doneSet.has(key(d))) d.setDate(d.getDate() - 1);
+  for (let i = 0; i < 500; i++) {
+    const wd = d.getDay();
+    if (doneSet.has(key(d))) n++;
+    else if (wd !== 0 && wd !== 6) break;
+    d.setDate(d.getDate() - 1);
+  }
+  return n;
+}
+function weekStrip(doneSet, today) {
+  const start = new Date(today); const wd = (start.getDay() + 6) % 7; start.setDate(start.getDate() - wd);
+  let h = "";
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const k = key(d), isToday = k === key(today);
+    const st = doneSet.has(k) ? "done" : (d.getDay() === 0 ? "rest" : (isToday ? "today" : "empty"));
+    h += `<div>${seedSvg(st)}<span>${DAYNAMES[d.getDay()]}</span></div>`;
+  }
+  return `<div class="week">${h}</div>`;
+}
+
+/* ---------- rewards (1 zrno = 5 min Minecrafta, odluka 30. 10.) ---------- */
+const REWARDS = [
+  { id: "mc15", label: "15 min Minecrafta", cost: 3 },
+  { id: "mc30", label: "30 min Minecrafta", cost: 6 },
+  { id: "mc60", label: "1 h Minecrafta", cost: 12 } ];
+let requests = [];
+async function loadRequests() {
+  if (!db) return [...memReq.values()];
+  try { const q = await db.collection("requests").get(); return q.docs.map(d => ({ id: d.id, ...d.data() })); } catch (_) { return []; }
+}
+const memReq = new Map();
+async function writeRequest(r) {
+  const { id, ...body } = r;
+  if (!db) { memReq.set(id, r); return true; }
+  try { await db.doc("requests/" + id).set(body); return true; } catch (_) { return false; }
+}
+function mondayOf(k) { const [y,m,d] = k.split("-").map(Number); const dt = new Date(y, m-1, d); dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7)); return dt; }
+function earnings(list) {
+  const done = list.filter(s => s.completed);
+  const daySet = new Set(done.filter(s => s.kind !== "extra").map(s => s.date));
+  const days = daySet.size, extras = done.filter(s => s.kind === "extra").length;
+  let weeks = 0; const seen = new Set();
+  for (const k of daySet) { const mon = mondayOf(k), mk = key(mon); if (seen.has(mk)) continue; seen.add(mk);
+    let full = true; for (let i = 0; i < 5; i++) { const d = new Date(mon); d.setDate(mon.getDate() + i); if (!daySet.has(key(d))) { full = false; break; } }
+    if (full) weeks++; }
+  return { days, extras, weeks, total: days + extras + weeks * 3 };
+}
+function balance() {
+  const e = earnings(sessions).total;
+  const spent = requests.filter(r => r.status === "approved").reduce((a, r) => a + r.cost, 0);
+  const held = requests.filter(r => r.status === "pending").reduce((a, r) => a + r.cost, 0);
+  return { earned: e, spent, held, free: e - spent - held };
+}
+
+/* ---------- state ---------- */
+let sessions = [];
+let run = null; // active session runtime
+
+function plan(today, list) {
+  const k = key(today), wd = today.getDay();
+  const todays = list.find(s => s.date === k && s.kind !== "extra");
+  const doneBaseline = list.filter(s => s.kind === "baseline" && s.completed && s.date !== k).length;
+  if (todays && todays.completed) return { mode: "done", session: todays };
+  if (wd === 0) return { mode: "rest" };
+  if (wd === 6) return { mode: "bonus", session: todays };
+  if (todays && todays.kind === "baseline") return { mode: "baseline", day: todays.day, session: todays };
+  if (doneBaseline >= DAYS.length) return { mode: "baselineDone" };
+  return { mode: "baseline", day: doneBaseline + 1 };
+}
+
+/* ---------- Lara views ---------- */
+const app = $("#app");
+function shell(inner, foot = true) {
+  app.innerHTML = `<div class="topbar"><div class="brand">${LOGO}<span>Šipak</span></div></div>${offline ? `<div class="notice">Spremanje trenutno ne radi. Rezultati se možda neće sačuvati.</div>` : ""}${inner}${foot ? `<p class="foot"><a href="#roditelj">Za roditelja</a></p>` : ""}`;
+}
+function home() {
+  const today = new Date();
+  const doneSet = new Set(sessions.filter(s => s.completed).map(s => s.date));
+  const streak = computeStreak(doneSet, today);
+  const p = plan(today, sessions);
+  const streakCard = `<div class="card"><div class="streak"><b>${streak}</b><span>${streak === 1 ? "dan" : "dana"} zaredom</span></div>${weekStrip(doneSet, today)}<p class="small muted">Nedjelja je odmor i ne prekida niz.</p></div>`;
+  const bal = balance();
+  const basketCard = `<div class="card"><div class="basket"><div><p class="label">Tvoja košarica</p><p><b>${bal.free}</b> ${zrna(bal.free)}</p></div><button class="btn" id="toRewards">Nagrade</button></div>
+    <p class="small muted">Zrno dobivaš za svaki riješen dan i bonus zadatak, a 3 zrna za cijeli tjedan. 1 zrno = 5 min Minecrafta.</p></div>`;
+  const extraDone = sessions.some(s => s.kind === "extra" && s.date === key(today) && s.completed);
+  let main = "";
+  if (p.mode === "done") main = `<div class="card"><h2>Za danas je gotovo!</h2><p>Bravo, Lara.</p>${extraDone ? `<p class="muted">Bonus zadatak je riješen. Vidimo se sutra!</p>` : `<p>Želiš li bonus zadatak? Pet računa iz tablice množenja, donosi još jedno zrno.</p><button class="btn" id="extra">Bonus zadatak</button>`}</div>`;
+  else if (p.mode === "rest") main = `<div class="card"><h2>Nedjelja je za odmor</h2><p>Tvoja zrna su sigurna. Sutra nastavljamo.</p></div>`;
+  else if (p.mode === "baselineDone") main = `<div class="card"><h2>Prvi tjedan je gotov!</h2><p>Svih pet dana je riješeno. Nova dnevna vježba stiže uskoro.</p></div>`;
+  else {
+    const isBonus = p.mode === "bonus";
+    const title = isBonus ? "Subotnji bonus" : `Dan ${p.day} od ${DAYS.length}`;
+    const sub = isBonus ? "Pet zadataka iz tablice množenja. Nije obavezno, ali donosi zrno." : DAYS[p.day - 1].title;
+    const n = isBonus ? 5 : DAYS[p.day - 1].items.length;
+    main = `<div class="card"><p class="label">${esc(title)}</p><h2>${esc(sub)}</h2><p class="muted">${n} zadataka</p>
+      <ul class="rules"><li>Uzmi papir i tamnu olovku. Računaj na papiru, ovdje upiši samo rezultat.</li><li>Svaki zadatak piši u svom dijelu stranice.</li><li>Ako ne znaš, slobodno preskoči.</li></ul>
+      <button class="btn" id="start">${p.session ? "Nastavi" : "Kreni"}</button></div>`;
+  }
+  shell(`<div><h1>Bok, Lara!</h1></div>${main}${basketCard}${streakCard}`);
+  const b = $("#start");
+  if (b) b.onclick = () => startSession(p);
+  const x = $("#extra");
+  if (x) x.onclick = () => startSession({ mode: "extra", session: sessions.find(s => s.kind === "extra" && s.date === key(today)) });
+  $("#toRewards").onclick = rewardsView;
+}
+
+function startSession(p) {
+  const today = new Date(), k = key(today);
+  const kind = p.mode === "bonus" ? "bonus" : p.mode === "extra" ? "extra" : "baseline";
+  const isB = kind !== "baseline";
+  const items = isB ? (p.session?.bonusItems || bonusItems()) : DAYS[p.day - 1].items;
+  const s = p.session && !p.session.completed ? JSON.parse(JSON.stringify(p.session)) : {
+    id: kind === "extra" ? k + "-bonus" : k, date: k, kind, day: kind === "baseline" ? p.day : null, startedAt: new Date().toISOString(),
+    completed: false, answers: [], photos: [], mood: null, activeMs: 0,
+    bonusItems: isB ? items : undefined };
+  const answered = new Set(s.answers.filter(a => !a.ladderOf).map(a => a.id));
+  const queue = items.filter(it => !answered.has(it.id)).map(it => ({ ...it }));
+  run = { s, queue, total: items.length, mainDone: answered.size, t0: performance.now(), activeAtStart: s.activeMs || 0 };
+  if (!sessions.find(x => x.id === s.id)) sessions.push(s);
+  nextStep();
+}
+
+function elapsed() { return run.activeAtStart + (performance.now() - run.t0); }
+
+function nextStep() {
+  if (!run.queue.length) { run.cut = false; if (run.s.kind === "extra") return finishExtra(); return photoStep(); }
+  const it = run.queue[0];
+  const pct = Math.round((run.mainDone / run.total) * 100);
+  const isLadder = !!it.ladderOf;
+  const promptHtml = esc(it.prompt).replace(/\n/g, "<br>");
+  const body = it.type === "choice"
+    ? `<div class="choices">${it.options.map((o, i) => `<button class="choice" id="ch${i}" data-v="${esc(o)}">${esc(o)}</button>`).join("")}</div>`
+    : `<input class="answer" id="ans" inputmode="numeric" autocomplete="off" aria-label="Rezultat" placeholder="?">
+       <button class="btn" id="go" disabled>Dalje</button>`;
+  shell(`<div class="progress" aria-hidden="true"><i style="width:${pct}%"></i></div>
+    <div class="card">${isLadder ? `<span class="ladder-tag">Kratko pitanje</span>` : `<p class="label">Zadatak ${run.mainDone + 1} od ${run.total}</p>`}
+      <div class="prompt${it.long ? " long" : ""}">${promptHtml}</div>${it.hint ? `<p class="hint">${esc(it.hint)}</p>` : ""}
+      ${body}
+      <button class="btn ghost" id="skip">Ne znam / preskoči</button></div>`, false);
+  const shown = performance.now();
+  const finish = (given, skipped) => record(it, given, skipped, Math.round(performance.now() - shown));
+  if (it.type === "choice") app.querySelectorAll(".choice").forEach(b => b.onclick = () => finish(b.dataset.v, false));
+  else {
+    const inp = $("#ans"), go = $("#go");
+    inp.focus();
+    inp.oninput = () => { go.disabled = !inp.value.trim(); };
+    inp.onkeydown = e => { if (e.key === "Enter" && inp.value.trim()) finish(inp.value.trim(), false); };
+    go.onclick = () => finish(inp.value.trim(), false);
+  }
+  $("#skip").onclick = () => finish(null, true);
+}
+
+function record(it, given, skipped, ms) {
+  run.queue.shift();
+  const correct = !skipped && norm(given) === norm(it.answer);
+  run.s.answers.push({ id: it.id, prompt: it.prompt, answer: it.answer, given, correct, skipped, ms, ladderOf: it.ladderOf || null, at: new Date().toISOString() });
+  if (!it.ladderOf) {
+    run.mainDone++;
+    if (!correct && it.ladder) run.queue.unshift(...it.ladder.map(l => ({ ...l, ladderOf: it.id })));
+  }
+  run.s.activeMs = Math.round(elapsed());
+  saveSession(run.s);
+  shell(`<div class="card"><p class="saved">Spremljeno!</p></div>`, false);
+  setTimeout(nextStep, 550);
+}
+
+async function finishExtra() {
+  run.s.completed = true; run.s.finishedAt = new Date().toISOString();
+  await saveSession(run.s); endStep();
+}
+function photoStep() {
+  shell(`<div class="card"><h2>Još samo fotka papira</h2>
+    <p>Slikaj papir na kojem si računala. Može jedna ili dvije fotke.</p>
+    <p class="small muted">Po danjem svjetlu, cijela stranica u kadru.</p>
+    <input type="file" id="ph" accept="image/*" multiple hidden>
+    <button class="btn" id="pick">Dodaj fotku</button>
+    <div class="thumbs" id="thumbs"></div><p class="small" id="pmsg" role="status"></p>
+    <button class="btn ghost" id="pdone">${run.s.photos.length ? "Dalje" : "Preskoči fotku"}</button></div>`, false);
+  const renderThumbs = () => { $("#thumbs").innerHTML = run.s.photos.map(photoTag).join(""); $("#pdone").textContent = run.s.photos.length ? "Dalje" : "Preskoči fotku"; };
+  renderThumbs();
+  if (!assets) { $("#pmsg").textContent = "Upload fotke ovdje nije dostupan."; $("#pick").disabled = true; }
+  $("#pick").onclick = () => $("#ph").click();
+  $("#ph").onchange = async e => {
+    const files = [...e.target.files].slice(0, 2 - Math.min(run.s.photos.length, 2));
+    for (const f of files) {
+      $("#pmsg").textContent = "Spremam fotku…";
+      try {
+        const blob = await toJpeg(f);
+        const r = await assets.upload(blob, { type: "image/jpeg" });
+        run.s.photos.push(r.id); await saveSession(run.s); renderThumbs(); $("#pmsg").textContent = "Fotka je spremljena.";
+      } catch (err) {
+        $("#pmsg").textContent = err && err.decode ? "Ova fotka se ne može otvoriti. Na iPhoneu: Postavke → Kamera → Formati → Najkompatibilnije, ili pošalji snimku zaslona." : "Fotka se nije spremila. Pokušaj ponovno.";
+      }
+    }
+    e.target.value = "";
+  };
+  $("#pdone").onclick = moodStep;
+}
+async function toJpeg(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej({ decode: true }); i.src = url; });
+    const sc = Math.min(1, 1800 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * sc); c.height = Math.round(img.naturalHeight * sc);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return await new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej({}), "image/jpeg", 0.85));
+  } finally { URL.revokeObjectURL(url); }
+}
+
+function moodStep() {
+  shell(`<div class="card"><h2>Kako ti je bilo danas?</h2>
+    <div class="moods"><button id="m1" data-m="1" aria-label="Teško">😟</button><button id="m2" data-m="2" aria-label="Onako">😐</button><button id="m3" data-m="3" aria-label="Dobro">😊</button></div></div>`, false);
+  app.querySelectorAll(".moods button").forEach(b => b.onclick = async () => {
+    run.s.mood = Number(b.dataset.m); run.s.completed = true; run.s.cut = !!run.cut; run.s.finishedAt = new Date().toISOString();
+    await saveSession(run.s);
+    endStep();
+  });
+}
+function endStep() {
+  const doneSet = new Set(sessions.filter(s => s.completed).map(s => s.date));
+  const streak = computeStreak(doneSet, new Date());
+  shell(`<div class="card"><h2>${run.cut ? "Dosta za danas!" : "Gotovo za danas!"}</h2>
+    <div class="streak"><b>${streak}</b><span>${streak === 1 ? "dan" : "dana"} zaredom</span></div>${weekStrip(doneSet, new Date())}
+    <p>${run.s.kind === "extra" ? "Bonus je gotov. Još jedno zrno je u košarici!" : "Bravo, Lara! Novo zrno je u košarici."}</p>
+    <button class="btn ghost" id="back">Natrag na početak</button></div>`);
+  run = null;
+  $("#back").onclick = home;
+}
+
+/* ---------- rewards view (Lara) ---------- */
+function rewardsView() {
+  const bal = balance();
+  const pend = requests.filter(r => r.status === "pending");
+  const hist = requests.filter(r => r.status !== "pending").sort((a, b) => b.at.localeCompare(a.at)).slice(0, 5);
+  shell(`<div class="card"><div class="basket"><div><p class="label">Tvoja košarica</p><p><b>${bal.free}</b> ${zrna(bal.free)}</p></div></div></div>
+    <div class="card"><h2>Nagrade</h2>${REWARDS.map(r => `<div class="reward"><div><h3>${esc(r.label)}</h3><p class="small muted">${r.cost} ${zrna(r.cost)}</p></div><button class="btn" data-r="${r.id}" ${bal.free < r.cost ? "disabled" : ""}>Zatraži</button></div>`).join("")}
+      <p class="small muted" id="rmsg" role="status">Mama odobrava svaku nagradu. Zrna se oduzimaju tek kad odobri.</p></div>
+    ${pend.length ? `<div class="card"><h3>Čeka odobrenje</h3>${pend.map(r => `<p>${esc(r.label)} · ${r.cost} ${zrna(r.cost)}</p>`).join("")}</div>` : ""}
+    ${hist.length ? `<div class="card"><h3>Prije</h3>${hist.map(r => `<p class="small">${esc(r.label)} · ${r.status === "approved" ? "odobreno" : "nije odobreno"}</p>`).join("")}</div>` : ""}
+    <button class="btn ghost" id="back">Natrag</button>`);
+  app.querySelectorAll("[data-r]").forEach(b => b.onclick = async () => {
+    const r = REWARDS.find(x => x.id === b.dataset.r); if (balance().free < r.cost) return;
+    b.disabled = true;
+    const req = { id: "r" + Date.now().toString(36), rewardId: r.id, label: r.label, cost: r.cost, status: "pending", at: new Date().toISOString() };
+    if (await writeRequest(req)) { requests.push(req); rewardsView(); $("#rmsg").textContent = "Zahtjev je poslan mami."; }
+    else { $("#rmsg").textContent = "Zahtjev se nije spremio. Pokušaj ponovno."; b.disabled = false; }
+  });
+  $("#back").onclick = home;
+}
+
+/* ---------- parent view ---------- */
+function parent() {
+  const today = new Date(), k = key(today);
+  const t = sessions.find(s => s.date === k && s.kind !== "extra");
+  const status = t?.completed ? ["var(--leaf)", "Danas je riješeno", `${t.answers.filter(a=>!a.ladderOf).length} zadataka, ${Math.round((t.activeMs||0)/60000)} min`]
+    : t ? ["var(--warn)", "Danas je započeto, nije dovršeno", `${t.answers.filter(a=>!a.ladderOf).length} zadataka do sada`]
+    : today.getDay() === 0 ? ["var(--muted)", "Nedjelja: pauza", ""] : ["var(--seed)", "Danas još nije riješeno", ""];
+  const doneBaseline = sessions.filter(s => s.kind === "baseline" && s.completed).length;
+  const doneSet = new Set(sessions.filter(s => s.completed).map(s => s.date));
+
+  const main = sessions.flatMap(s => s.answers.filter(a => !a.ladderOf));
+  const groups = {};
+  for (const a of main) { const c = a.id.match(/^[A-Z]/)[0]; (groups[c] ||= []).push(a); }
+  const stats = Object.keys(CAT).filter(c => groups[c]).map(c => {
+    const g = groups[c], ok = g.filter(a => a.correct).length, sk = g.filter(a => a.skipped).length;
+    return `<div class="stat"><span class="cat">${esc(CAT[c])}</span><span class="num">${ok}/${g.length} točno${sk ? ` · ${sk} preskočeno` : ""}</span><span class="num muted small">medijan ${secs(median(g.map(a => a.ms)))}</span></div>`;
+  }).join("");
+  const slow = main.filter(a => a.correct).sort((a, b) => b.ms - a.ms).slice(0, 5);
+  const wrong = main.filter(a => !a.correct);
+
+  const sessHtml = [...sessions].sort((a, b) => b.date.localeCompare(a.date)).map(s => {
+    const rows = s.answers.map(a => `<tr class="${a.ladderOf ? "lad" : ""}"><td>${esc(a.prompt).replace(/\n/g," ")}</td><td>${esc(a.answer)}</td><td>${a.skipped ? "–" : esc(a.given)}</td>
+      <td>${a.skipped ? '<span class="pill skip">preskok</span>' : a.correct ? '<span class="pill ok">točno</span>' : '<span class="pill no">netočno</span>'}</td><td>${secs(a.ms)}</td></tr>`).join("");
+    const mood = { 1: "😟 teško", 2: "😐 onako", 3: "😊 dobro" }[s.mood] || "–";
+    return `<details class="card"><summary>${fmtDate(s.date)} · ${s.kind === "bonus" ? "Subotnji bonus" : s.kind === "extra" ? "Bonus zadatak" : `Baseline dan ${s.day}`} ${s.completed ? "" : "(nedovršeno)"}</summary>
+      <p class="small muted">Aktivno vrijeme ${Math.round((s.activeMs||0)/60000)} min · raspoloženje ${mood}${s.cut ? " · prekinuto na 20 min" : ""}</p>
+      ${s.photos?.length ? `<div class="thumbs">${s.photos.map(photoTag).join("")}</div>` : `<p class="small muted">Bez fotke.</p>`}
+      <div class="tablebox"><table><thead><tr><th>Zadatak</th><th>Točno</th><th>Lara</th><th>Ishod</th><th>Vrijeme</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+  }).join("");
+
+  app.innerHTML = `<div class="topbar"><div class="brand">${LOGO}<span>Šipak</span></div><a href="#" id="toLara">Larin prikaz</a></div>
+    ${offline ? `<div class="notice">Spremanje trenutno ne radi.</div>` : ""}
+    <div><h1>Pregled za roditelja</h1></div>
+    <div class="card"><div class="status"><span class="dot" style="background:${status[0]}"></span><div><h3>${status[1]}</h3>${status[2] ? `<p class="small muted">${status[2]}</p>` : ""}</div></div>
+      <p class="small">Baseline: ${doneBaseline} od ${DAYS.length} dana · niz: ${computeStreak(doneSet, today)} ${computeStreak(doneSet, today) === 1 ? "dan" : "dana"}</p></div>
+    ${parentRewards()}
+    <div class="card"><h3>Po kategorijama</h3>${stats ? `<div class="stat-grid">${stats}</div>` : `<p class="muted">Rezultati će se pojaviti nakon prvog dana.</p>`}
+      <p class="small muted">Vrijeme Lara ne vidi. Ciljevi se postavljaju nakon cijelog baselinea.</p></div>
+    ${wrong.length ? `<div class="card"><h3>Netočno ili preskočeno</h3><div class="tablebox"><table><thead><tr><th>Zadatak</th><th>Točno</th><th>Lara</th><th>Vrijeme</th></tr></thead><tbody>${wrong.map(a => `<tr><td>${esc(a.prompt).replace(/\n/g," ")}</td><td>${esc(a.answer)}</td><td>${a.skipped ? "preskok" : esc(a.given)}</td><td>${secs(a.ms)}</td></tr>`).join("")}</tbody></table></div></div>` : ""}
+    ${slow.length ? `<div class="card"><h3>Najsporiji točni odgovori</h3><div class="tablebox"><table><tbody>${slow.map(a => `<tr><td>${esc(a.prompt).replace(/\n/g," ")} = ${esc(a.answer)}</td><td>${secs(a.ms)}</td></tr>`).join("")}</tbody></table></div></div>` : ""}
+    <div><h2>Dani</h2></div>${sessHtml || `<p class="muted">Još nema riješenih dana.</p>`}`;
+  $("#toLara").onclick = e => { e.preventDefault(); location.hash = ""; };
+  app.querySelectorAll("[data-dec]").forEach(b => b.onclick = async () => {
+    const r = requests.find(x => x.id === b.dataset.id); if (!r) return;
+    const prev = r.status; r.status = b.dataset.dec; r.decidedAt = new Date().toISOString();
+    if (!(await writeRequest(r))) r.status = prev;
+    parent();
+  });
+}
+function parentRewards() {
+  const bal = balance(), e = earnings(sessions);
+  const pend = requests.filter(r => r.status === "pending");
+  return `<div class="card"><h3>Zrna i nagrade</h3>
+    <p class="small">Zarađeno ${bal.earned} (dani ${e.days}, bonusi ${e.extras}, puni tjedni ${e.weeks} × 3) · potrošeno ${bal.spent} · na čekanju ${bal.held} · slobodno ${bal.free}</p>
+    ${pend.length ? pend.map(r => `<div class="req"><span>${esc(r.label)} · ${r.cost} ${zrna(r.cost)}<br><span class="small muted">${fmtDate(r.at.slice(0,10))}</span></span>
+      <div class="row"><button class="btn" data-dec="approved" data-id="${r.id}">Odobri</button><button class="btn ghost" data-dec="declined" data-id="${r.id}">Odbij</button></div></div>`).join("") : `<p class="small muted">Nema zahtjeva na čekanju.</p>`}</div>`;
+}
+
+/* ---------- parent PIN ---------- */
+let unlocked = false, memPin = null;
+async function hashPin(pin) {
+  const data = new TextEncoder().encode("sipak:" + pin);
+  try { const h = await crypto.subtle.digest("SHA-256", data); return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, "0")).join(""); }
+  catch (_) { let x = 0; for (const b of data) x = (x * 31 + b) >>> 0; return "f" + x.toString(16); }
+}
+async function loadPin() {
+  if (!db) return memPin;
+  try { const d = await db.doc("settings/pin").get(); return d.exists ? d.data().hash : null; } catch (_) { return null; }
+}
+async function savePin(hash) {
+  if (!db) { memPin = hash; return true; }
+  try { await db.doc("settings/pin").set({ hash, setAt: new Date().toISOString() }); return true; } catch (_) { return false; }
+}
+async function pinGate() {
+  const existing = await loadPin();
+  const field = (id, label) => `<label class="small" for="${id}">${label}</label><input class="answer" id="${id}" type="password" inputmode="numeric" maxlength="4" autocomplete="off">`;
+  app.innerHTML = `<div class="topbar"><div class="brand">${LOGO}<span>Šipak</span></div><a href="#" id="toLara">Larin prikaz</a></div>
+    <div class="card"><h2>${existing ? "Upiši PIN" : "Postavi PIN za roditelja"}</h2>
+      ${existing ? field("pin1", "PIN (4 znamenke)") : `<p class="small muted">Pregled za roditelja bit će zaključan ovim PIN-om.</p>${field("pin1", "Novi PIN (4 znamenke)")}${field("pin2", "Ponovi PIN")}`}
+      <p class="small" id="pinmsg" role="status"></p>
+      <button class="btn" id="pingo">${existing ? "Otključaj" : "Spremi PIN"}</button></div>`;
+  $("#toLara").onclick = e => { e.preventDefault(); location.hash = ""; };
+  const p1 = $("#pin1"), p2 = $("#pin2"), msg = $("#pinmsg");
+  p1.focus();
+  const go = async () => {
+    const v = p1.value.trim();
+    if (!/^\d{4}$/.test(v)) { msg.textContent = "PIN mora imati točno 4 znamenke."; return; }
+    if (existing) {
+      if ((await hashPin(v)) === existing) { unlocked = true; parent(); }
+      else { msg.textContent = "PIN nije točan."; p1.value = ""; p1.focus(); }
+    } else {
+      if (v !== p2.value.trim()) { msg.textContent = "PIN-ovi se ne podudaraju."; return; }
+      if (await savePin(await hashPin(v))) { unlocked = true; parent(); }
+      else msg.textContent = "PIN se nije spremio. Pokušaj ponovno.";
+    }
+  };
+  $("#pingo").onclick = go;
+  [p1, p2].forEach(i => i && (i.onkeydown = e => { if (e.key === "Enter") go(); }));
+}
+
+/* ---------- login (once per device) ---------- */
+function loginView(msg = "") {
+  app.innerHTML = `<div class="topbar"><div class="brand">${LOGO}<span>Šipak</span></div></div>
+    <div class="card"><h2>Prijava</h2><p class="small muted">Prijavu radi roditelj, jednom na ovom uređaju. Nakon toga Šipak ostaje prijavljen.</p>
+      <label class="small" for="em">Email</label><input class="answer" id="em" type="email" autocomplete="username" style="font-size:1.1rem">
+      <label class="small" for="pw">Lozinka</label><input class="answer" id="pw" type="password" autocomplete="current-password" style="font-size:1.1rem">
+      <p class="small" id="lmsg" role="status">${esc(msg)}</p>
+      <button class="btn" id="lgo">Prijavi se</button></div>`;
+  const go = async () => {
+    $("#lmsg").textContent = "Prijavljujem…";
+    try { await signIn($("#em").value.trim(), $("#pw").value); db = sbdb; assets = sbassets; offline = false; await refresh(); }
+    catch (e) { $("#lmsg").textContent = e.code === "bad_login" ? "Email ili lozinka nisu točni." : "Prijava trenutno ne radi. Provjeri internet i pokušaj ponovno."; }
+  };
+  $("#lgo").onclick = go; $("#pw").onkeydown = e => { if (e.key === "Enter") go(); };
+}
+
+/* ---------- boot & routing ---------- */
+async function refresh() { [sessions, requests] = await Promise.all([loadSessions(), loadRequests()]); route(); }
+function route() { if (run) return; if (location.hash === "#roditelj") { unlocked ? parent() : pinGate(); } else { unlocked = false; home(); } }
+window.addEventListener("hashchange", () => { if (!run) refresh(); });
+(async () => {
+  if (!auth.refresh) return loginView();
+  try { await token(); } catch (e) { if (e.code === "login") return loginView(); offline = true; }
+  db = sbdb; assets = sbassets;
+  await refresh();
+})();
+</script>
+
+</body>
+</html>
