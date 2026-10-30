@@ -173,11 +173,27 @@ const CAT = { A:"Zbrajanje i oduzimanje do 20", B:"Tablica množenja", C:"Tablic
   P:"Pisani računi", E:"Mjerne jedinice i novac", F:"Skupovi", G:"Algebarski izrazi", H:"Kvadrati", I:"Jednadžbe", J:"Nejednadžbe", X:"Bonus" };
 const zrna = n => (n % 10 === 1 && n % 100 !== 11) ? "zrno" : "zrna";
 
-function bonusItems() {
-  const pairs = []; const seen = new Set();
-  while (pairs.length < 5) { const a = 6 + Math.floor(Math.random() * 4), b = 3 + Math.floor(Math.random() * 7), k = a + "x" + b;
-    if (!seen.has(k)) { seen.add(k); pairs.push(N("X" + (pairs.length + 1), `${a} · ${b}`, a * b)); } }
-  return pairs;
+function factKey(x, y) { return Math.min(x, y) + "x" + Math.max(x, y); }
+function usedFacts(list, sinceKey) {
+  const used = new Set();
+  for (const ses of list) { if (ses.date < sinceKey) continue;
+    for (const a of ses.answers || []) {
+      let m = String(a.prompt).match(/^(\d+) · (\d+)$/); if (m) { used.add(factKey(+m[1], +m[2])); continue; }
+      m = String(a.prompt).match(/^(\d+) : (\d+)$/); if (m && +m[1] % +m[2] === 0 && +m[1] <= 100) used.add(factKey(+m[2], +m[1] / +m[2])); } }
+  return used;
+}
+function bonusItems(exclude = new Set()) {
+  const out = [], seen = new Set(exclude);
+  const pool = [];
+  for (let a = 6; a <= 9; a++) for (let b = 3; b <= 9; b++) { const k = factKey(a, b); if (!seen.has(k)) { seen.add(k); pool.push([a, b]); } }
+  const shuffle = arr => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+  shuffle(pool);
+  if (pool.length < 5) pool.push(...shuffle([...exclude].map(k => k.split("x").map(Number)).filter(([x, y]) => x >= 3 && y >= 3)).slice(0, 5 - pool.length));
+  for (const [a, b] of pool.slice(0, 5)) {
+    const id = "X" + (out.length + 1), [x, y] = Math.random() < .5 ? [a, b] : [b, a];
+    out.push(Math.random() < .35 ? N(id, `${x * y} : ${x}`, y) : N(id, `${x} · ${y}`, x * y));
+  }
+  return out;
 }
 
 /* ---------- helpers ---------- */
@@ -380,7 +396,8 @@ function startSession(p) {
   const today = new Date(), k = key(today);
   const kind = p.mode === "bonus" ? "bonus" : p.mode === "extra" ? "extra" : "baseline";
   const isB = kind !== "baseline";
-  const items = isB ? (p.session?.bonusItems || bonusItems()) : DAYS[p.day - 1].items;
+  const weekAgo = new Date(today); weekAgo.setDate(weekAgo.getDate() - 6);
+  const items = isB ? (p.session?.bonusItems || bonusItems(usedFacts(sessions, kind === "extra" ? k : key(weekAgo)))) : DAYS[p.day - 1].items;
   const s = p.session && !p.session.completed ? JSON.parse(JSON.stringify(p.session)) : {
     id: kind === "extra" ? k + "-bonus" : k, date: k, kind, day: kind === "baseline" ? p.day : null, startedAt: new Date().toISOString(),
     completed: false, answers: [], photos: [], mood: null, activeMs: 0,
