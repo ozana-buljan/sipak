@@ -83,6 +83,12 @@ a { color: var(--garnet); }
 .notice { background: var(--warn-soft); color: var(--warn); border-radius: 12px; padding: 10px 14px; font-size: .92rem; }
 .rules { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
 .foot { text-align: center; }
+.taskhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pausebtn { appearance: none; border: 1.5px solid var(--line); background: transparent; color: var(--muted); border-radius: 99px; padding: 6px 14px; font: 700 .9rem var(--f-body); cursor: pointer; min-height: 36px; }
+.modal { position: fixed; inset: 0; z-index: 50; background: var(--paper); display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.modal .card { max-width: 440px; width: 100%; text-align: center; align-items: center; }
+.modal svg { width: 72px; height: 72px; }
 .basket { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .basket b { font-family: var(--f-display); font-size: 2.4rem; color: var(--garnet); font-variant-numeric: tabular-nums; }
 .reward { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
@@ -379,12 +385,33 @@ function startSession(p) {
     bonusItems: isB ? items : undefined };
   const answered = new Set(s.answers.filter(a => !a.ladderOf).map(a => a.id));
   const queue = items.filter(it => !answered.has(it.id)).map(it => ({ ...it }));
-  run = { s, queue, total: items.length, mainDone: answered.size, t0: performance.now(), activeAtStart: s.activeMs || 0 };
+  run = { s, queue, total: items.length, mainDone: answered.size, t0: performance.now(), activeAtStart: s.activeMs || 0, pauseTotal: 0, paused: null };
+  run.s.pauses = run.s.pauses || [];
   if (!sessions.find(x => x.id === s.id)) sessions.push(s);
   nextStep();
 }
 
-function elapsed() { return run.activeAtStart + (performance.now() - run.t0); }
+function elapsed() { const now = performance.now(); return run.activeAtStart + (now - run.t0) - run.pauseTotal - (run.paused ? now - run.paused.t : 0); }
+function pause(auto) {
+  if (!run || run.paused || !run.inTask) return;
+  run.paused = { t: performance.now(), at: new Date().toISOString(), auto, item: run.queue[0] && run.queue[0].id };
+  const m = document.createElement("div");
+  m.className = "modal"; m.id = "pauseModal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true"); m.setAttribute("aria-labelledby", "pauseTitle");
+  m.innerHTML = `<div class="card">${LOGO}<h2 id="pauseTitle">Pauza</h2><p>Zadatak te čeka. Kad se vratiš, nastavljamo točno ondje gdje si stala.</p><button class="btn" id="resume" style="width:100%">Nastavi</button></div>`;
+  document.body.appendChild(m);
+  $("#resume").onclick = resume; $("#resume").focus();
+}
+function resume() {
+  if (!run || !run.paused) return;
+  const ms = Math.round(performance.now() - run.paused.t);
+  run.pauseTotal += ms;
+  run.s.pauses.push({ at: run.paused.at, ms, auto: run.paused.auto, item: run.paused.item });
+  run.paused = null;
+  const m = $("#pauseModal"); if (m) m.remove();
+  saveSession(run.s);
+  const inp = $("#ans"); if (inp) inp.focus();
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") pause(true); });
 
 function nextStep() {
   if (!run.queue.length) { run.cut = false; if (run.s.kind === "extra") return finishExtra(); return photoStep(); }
@@ -397,12 +424,14 @@ function nextStep() {
     : `<input class="answer" id="ans" inputmode="numeric" autocomplete="off" aria-label="Rezultat" placeholder="?">
        <button class="btn" id="go" disabled>Dalje</button>`;
   shell(`<div class="progress" aria-hidden="true"><i style="width:${pct}%"></i></div>
-    <div class="card">${isLadder ? `<span class="ladder-tag">Kratko pitanje</span>` : `<p class="label">Zadatak ${run.mainDone + 1} od ${run.total}</p>`}
+    <div class="card"><div class="taskhead">${isLadder ? `<span class="ladder-tag">Kratko pitanje</span>` : `<p class="label">Zadatak ${run.mainDone + 1} od ${run.total}</p>`}<button class="pausebtn" id="pauseBtn">Pauza</button></div>
       <div class="prompt${it.long ? " long" : ""}">${promptHtml}</div>${it.hint ? `<p class="hint">${esc(it.hint)}</p>` : ""}
       ${body}
       <button class="btn ghost" id="skip">Ne znam / preskoči</button></div>`, false);
-  const shown = performance.now();
-  const finish = (given, skipped) => record(it, given, skipped, Math.round(performance.now() - shown));
+  const shown = performance.now(), pauseAtShow = run.pauseTotal;
+  run.inTask = true;
+  $("#pauseBtn").onclick = () => pause(false);
+  const finish = (given, skipped) => { if (run.paused) return; run.inTask = false; record(it, given, skipped, Math.round(performance.now() - shown - (run.pauseTotal - pauseAtShow))); };
   if (it.type === "choice") app.querySelectorAll(".choice").forEach(b => b.onclick = () => finish(b.dataset.v, false));
   else {
     const inp = $("#ans"), go = $("#go");
@@ -537,7 +566,7 @@ function parent() {
       <td>${a.skipped ? '<span class="pill skip">preskok</span>' : a.correct ? '<span class="pill ok">točno</span>' : '<span class="pill no">netočno</span>'}</td><td>${secs(a.ms)}</td></tr>`).join("");
     const mood = { 1: "😟 teško", 2: "😐 onako", 3: "😊 dobro" }[s.mood] || "–";
     return `<details class="card"><summary>${fmtDate(s.date)} · ${s.kind === "bonus" ? "Subotnji bonus" : s.kind === "extra" ? "Bonus zadatak" : `Baseline dan ${s.day}`} ${s.completed ? "" : "(nedovršeno)"}</summary>
-      <p class="small muted">Aktivno vrijeme ${Math.round((s.activeMs||0)/60000)} min · raspoloženje ${mood}${s.cut ? " · prekinuto na 20 min" : ""}</p>
+      <p class="small muted">Aktivno vrijeme ${Math.round((s.activeMs||0)/60000)} min · raspoloženje ${mood}${s.pauses?.length ? ` · pauze: ${s.pauses.length} (${Math.round(s.pauses.reduce((a, x) => a + x.ms, 0) / 60000)} min, od toga ${s.pauses.filter(x => x.auto).length} automatski)` : ""}</p>
       ${s.photos?.length ? `<div class="thumbs">${s.photos.map(photoTag).join("")}</div>` : `<p class="small muted">Bez fotke.</p>`}
       <div class="tablebox"><table><thead><tr><th>Zadatak</th><th>Točno</th><th>Lara</th><th>Ishod</th><th>Vrijeme</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
   }).join("");
