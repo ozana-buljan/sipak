@@ -90,6 +90,15 @@ a { color: var(--garnet); }
 .notice { background: var(--warn-soft); color: var(--warn); border-radius: 12px; padding: 10px 14px; font-size: .92rem; }
 .rules { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
 .foot { text-align: center; }
+.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tabs a { padding: 10px 12px; text-decoration: none; color: var(--muted); font-weight: 700; border-bottom: 3px solid transparent; white-space: nowrap; }
+.tabs a[aria-current="page"] { color: var(--garnet); border-bottom-color: var(--garnet); }
+.rep h3 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.rep .body { display: flex; flex-direction: column; gap: 8px; }
+.rep .body ul { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 4px; }
+.rep .body h4 { margin: 6px 0 0; font-family: var(--f-display); font-size: 1rem; }
+.obs-ev { margin: 0; padding-left: 1.2em; font-size: .9rem; color: var(--muted); }
+textarea.answer { font-size: 1rem; font-weight: 400; min-height: 90px; resize: vertical; }
 .donecount { font-size: 1.15rem; }
 .donecount b { font-family: var(--f-display); color: var(--garnet); }
 .taskhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -606,7 +615,7 @@ function parent() {
 
   app.innerHTML = `<div class="topbar"><div class="brand">${LOGO}<span>Šipak</span></div><a href="#" id="toLara">Larin prikaz</a></div>
     ${offline ? `<div class="notice">Spremanje trenutno ne radi.</div>` : ""}
-    <div><h1>Pregled za roditelja</h1></div>
+    <div><h1>Za roditelja</h1></div>${parentTabs("#roditelj")}
     <div class="card"><div class="status"><span class="dot" style="background:${status[0]}"></span><div><h3>${status[1]}</h3>${status[2] ? `<p class="small muted">${status[2]}</p>` : ""}</div></div>
       <p class="small">Baseline: ${doneBaseline} od ${DAYS.length} dana · niz: ${computeStreak(doneSet, today)} ${computeStreak(doneSet, today) === 1 ? "dan" : "dana"}</p></div>
     ${parentRewards()}
@@ -652,6 +661,61 @@ function parentHistory() {
     </tbody></table></div></div>`;
 }
 
+function parentTabs(active) {
+  const t = [["#roditelj", "Pregled"], ["#izvjestaji", `Izvještaji${reports.length ? ` (${reports.length})` : ""}`], ["#opazanja", `Opažanja${observations.length ? ` (${observations.length})` : ""}`]];
+  return `<nav class="tabs" aria-label="Roditeljski prikaz">${t.map(([h, l]) => `<a href="${h}" ${h === active ? 'aria-current="page"' : ""}>${l}</a>`).join("")}</nav>`;
+}
+function parentShell(active, inner) {
+  app.innerHTML = `<div class="topbar"><div class="brand">${LOGO}<span>Šipak</span></div><a href="#" id="toLara">Larin prikaz</a></div>
+    <div><h1>Za roditelja</h1></div>${parentTabs(active)}${inner}`;
+  $("#toLara").onclick = e => { e.preventDefault(); location.hash = ""; };
+}
+/* plain-text body: lines starting "## " = subheading, "- " = bullet; everything escaped */
+function richText(t) {
+  const out = []; let list = null;
+  for (const raw of String(t || "").split("\n")) {
+    const line = raw.trim();
+    if (line.startsWith("- ")) { (list ||= []).push(`<li>${esc(line.slice(2))}</li>`); continue; }
+    if (list) { out.push(`<ul>${list.join("")}</ul>`); list = null; }
+    if (!line) continue;
+    out.push(line.startsWith("## ") ? `<h4>${esc(line.slice(3))}</h4>` : `<p>${esc(line)}</p>`);
+  }
+  if (list) out.push(`<ul>${list.join("")}</ul>`);
+  return out.join("");
+}
+function reportsView() {
+  const list = [...reports].sort((a, b) => (b.date || "").localeCompare(a.date || "") || (a.type === "weekly" ? -1 : 1));
+  parentShell("#izvjestaji", list.length ? list.map((r, i) => `<details class="card rep" ${i === 0 ? "open" : ""}><summary><span class="pill ${r.type === "weekly" ? "ok" : "skip"}">${r.type === "weekly" ? "Tjedni" : "Dnevni"}</span> ${esc(r.title || "")} · ${r.date ? fmtDate(r.date) : ""}</summary>
+      <div class="body">${richText(r.body)}</div><p class="small muted">Napisao Claude iz Larinih podataka. Brojke su iz baze; zaključci su procjena, ne dijagnoza.</p></details>`).join("")
+    : `<div class="card"><p class="muted">Izvještaji se pojavljuju svaku večer nakon Larine vježbe (pon–sub), a petkom i tjedni.</p></div>`);
+}
+function observationsView() {
+  const list = [...observations].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const ST = { prati: ["skip", "Pratimo"], defektologinja: ["no", "Za defektologinju"], podijeljeno: ["ok", "Podijeljeno"], zatvoreno: ["ok", "Zatvoreno"] };
+  parentShell("#opazanja", `<div class="card"><h3>Dodaj opažanje</h3>
+      <label class="small" for="obsT">Što si primijetila?</label><textarea class="answer" id="obsT" placeholder="npr. Danas je brojala na prste kod 7 · 8"></textarea>
+      <p class="small" id="obsMsg" role="status"></p><button class="btn" id="obsAdd">Spremi opažanje</button></div>
+    ${list.length ? list.map(o => { const st = ST[o.status] || ST.prati; return `<div class="card"><h3>${esc(o.title || "Opažanje")}</h3>
+      <p class="small muted">${o.date ? fmtDate(o.date) : ""} · ${o.source === "roditelj" ? "ti" : "Claude"} · <span class="pill ${st[0]}">${st[1]}</span></p>
+      ${o.text ? `<p>${esc(o.text)}</p>` : ""}
+      ${o.evidence?.length ? `<ul class="obs-ev">${o.evidence.map(e => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}
+      <div class="row">${Object.entries(ST).filter(([k]) => k !== (o.status || "prati")).map(([k, v]) => `<button class="btn ghost" data-obs="${o.id}" data-st="${k}" style="min-height:38px;padding:6px 12px;font-size:.9rem;flex:none">${v[1]}</button>`).join("")}</div></div>`; }).join("")
+    : `<div class="card"><p class="muted">Ovdje se bilježe obrasci koje vrijedi pratiti ili pokazati defektologinji, s konkretnim primjerima.</p></div>`}`);
+  $("#obsAdd").onclick = async () => {
+    const text = $("#obsT").value.trim(); if (!text) { $("#obsMsg").textContent = "Upiši opažanje."; return; }
+    const o = { id: "o" + Date.now().toString(36), date: key(new Date()), title: text.length > 60 ? text.slice(0, 57) + "…" : text, text, evidence: [], status: "prati", source: "roditelj", createdAt: new Date().toISOString() };
+    const { id, ...body } = o;
+    try { await db.doc("observations/" + id).set(body); observations.push(o); observationsView(); }
+    catch (_) { $("#obsMsg").textContent = "Opažanje se nije spremilo. Pokušaj ponovno."; }
+  };
+  app.querySelectorAll("[data-obs]").forEach(b => b.onclick = async () => {
+    const o = observations.find(x => x.id === b.dataset.obs); if (!o) return;
+    const prev = o.status; o.status = b.dataset.st; const { id, ...body } = o;
+    try { await db.doc("observations/" + id).set(body); } catch (_) { o.status = prev; }
+    observationsView();
+  });
+}
+
 /* ---------- parent PIN ---------- */
 let unlocked = false, memPin = null;
 async function hashPin(pin) {
@@ -682,11 +746,11 @@ async function pinGate() {
     const v = p1.value.trim();
     if (!/^\d{4}$/.test(v)) { msg.textContent = "PIN mora imati točno 4 znamenke."; return; }
     if (existing) {
-      if ((await hashPin(v)) === existing) { unlocked = true; parent(); }
+      if ((await hashPin(v)) === existing) { unlocked = true; route(); }
       else { msg.textContent = "PIN nije točan."; p1.value = ""; p1.focus(); }
     } else {
       if (v !== p2.value.trim()) { msg.textContent = "PIN-ovi se ne podudaraju."; return; }
-      if (await savePin(await hashPin(v))) { unlocked = true; parent(); }
+      if (await savePin(await hashPin(v))) { unlocked = true; route(); }
       else msg.textContent = "PIN se nije spremio. Pokušaj ponovno.";
     }
   };
@@ -711,8 +775,11 @@ function loginView(msg = "") {
 }
 
 /* ---------- boot & routing ---------- */
-async function refresh() { [sessions, requests] = await Promise.all([loadSessions(), loadRequests()]); route(); }
-function route() { if (run) return; if (location.hash === "#roditelj") { unlocked ? parent() : pinGate(); } else { unlocked = false; home(); } }
+let reports = [], observations = [];
+async function loadAll(table) { if (!db) return []; try { const q = await db.collection(table).get(); return q.docs.map(d => ({ id: d.id, ...d.data() })); } catch (_) { return []; } }
+async function refresh() { [sessions, requests, reports, observations] = await Promise.all([loadSessions(), loadRequests(), loadAll("reports"), loadAll("observations")]); route(); }
+const PARENT_VIEWS = { "#roditelj": () => parent(), "#izvjestaji": () => reportsView(), "#opazanja": () => observationsView() };
+function route() { if (run) return; const v = PARENT_VIEWS[location.hash]; if (v) { unlocked ? v() : pinGate(); } else { unlocked = false; home(); } }
 window.addEventListener("hashchange", () => { if (!run) refresh(); });
 (async () => {
   if (!auth.refresh) return loginView();
