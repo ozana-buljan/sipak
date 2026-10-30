@@ -555,7 +555,7 @@ function rewardsView() {
     <div class="card"><h2>Nagrade</h2>${REWARDS.map(r => `<div class="reward"><div><h3>${esc(r.label)}</h3><p class="small muted">${r.cost} ${zrna(r.cost)}</p></div><button class="btn" data-r="${r.id}" ${bal.free < r.cost ? "disabled" : ""}>Zatraži</button></div>`).join("")}
       <p class="small muted" id="rmsg" role="status">Mama odobrava svaku nagradu. Zrna se oduzimaju tek kad odobri.</p></div>
     ${pend.length ? `<div class="card"><h3>Čeka odobrenje</h3>${pend.map(r => `<p>${esc(r.label)} · ${r.cost} ${zrna(r.cost)}</p>`).join("")}</div>` : ""}
-    ${hist.length ? `<div class="card"><h3>Prije</h3>${hist.map(r => `<p class="small">${esc(r.label)} · ${r.status === "approved" ? "odobreno" : "nije odobreno"}</p>`).join("")}</div>` : ""}
+    ${hist.length ? `<div class="card"><h3>Prije</h3>${hist.map(r => `<p class="small">${esc(r.label)} · ${r.status === "approved" ? (r.usedAt ? "odigrano" : "odobreno") : "nije odobreno"}</p>`).join("")}</div>` : ""}
     <button class="btn ghost" id="back">Natrag</button>`);
   app.querySelectorAll("[data-r]").forEach(b => b.onclick = async () => {
     const r = REWARDS.find(x => x.id === b.dataset.r); if (balance().free < r.cost) return;
@@ -609,6 +609,12 @@ function parent() {
     ${slow.length ? `<div class="card"><h3>Najsporiji točni odgovori</h3><div class="tablebox"><table><tbody>${slow.map(a => `<tr><td>${esc(a.prompt).replace(/\n/g," ")} = ${esc(a.answer)}</td><td>${secs(a.ms)}</td></tr>`).join("")}</tbody></table></div></div>` : ""}
     <div><h2>Dani</h2></div>${sessHtml || `<p class="muted">Još nema riješenih dana.</p>`}`;
   $("#toLara").onclick = e => { e.preventDefault(); location.hash = ""; };
+  app.querySelectorAll("[data-used]").forEach(b => b.onclick = async () => {
+    const r = requests.find(x => x.id === b.dataset.used); if (!r) return;
+    r.usedAt = new Date().toISOString();
+    if (!(await writeRequest(r))) delete r.usedAt;
+    parent();
+  });
   app.querySelectorAll("[data-dec]").forEach(b => b.onclick = async () => {
     const r = requests.find(x => x.id === b.dataset.id); if (!r) return;
     const prev = r.status; r.status = b.dataset.dec; r.decidedAt = new Date().toISOString();
@@ -622,7 +628,21 @@ function parentRewards() {
   return `<div class="card"><h3>Zrna i nagrade</h3>
     <p class="small">Zarađeno ${bal.earned} (dani ${e.days}, bonusi ${e.extras}, puni tjedni ${e.weeks} × 3) · potrošeno ${bal.spent} · na čekanju ${bal.held} · slobodno ${bal.free}</p>
     ${pend.length ? pend.map(r => `<div class="req"><span>${esc(r.label)} · ${r.cost} ${zrna(r.cost)}<br><span class="small muted">${fmtDate(r.at.slice(0,10))}</span></span>
-      <div class="row"><button class="btn" data-dec="approved" data-id="${r.id}">Odobri</button><button class="btn ghost" data-dec="declined" data-id="${r.id}">Odbij</button></div></div>`).join("") : `<p class="small muted">Nema zahtjeva na čekanju.</p>`}</div>`;
+      <div class="row"><button class="btn" data-dec="approved" data-id="${r.id}">Odobri</button><button class="btn ghost" data-dec="declined" data-id="${r.id}">Odbij</button></div></div>`).join("") : `<p class="small muted">Nema zahtjeva na čekanju.</p>`}</div>
+    ${parentHistory()}`;
+}
+function parentHistory() {
+  const hist = requests.filter(r => r.status !== "pending").sort((a, b) => (b.decidedAt || b.at).localeCompare(a.decidedAt || a.at));
+  if (!hist.length) return "";
+  const notUsed = hist.filter(r => r.status === "approved" && !r.usedAt);
+  const unusedMin = notUsed.reduce((a, r) => a + r.cost * 5, 0);
+  return `<div class="card"><h3>Iskorištene nagrade</h3>
+    ${notUsed.length ? `<p class="small">Odobreno, a još nije odigrano: ${unusedMin} min</p>` : ""}
+    <div class="tablebox"><table><thead><tr><th>Zatraženo</th><th>Nagrada</th><th>Zrna</th><th>Status</th></tr></thead><tbody>
+    ${hist.map(r => `<tr><td>${fmtDate(r.at.slice(0, 10))}</td><td>${esc(r.label)}</td><td>${r.cost}</td><td>${r.status === "declined" ? '<span class="pill skip">odbijeno</span>'
+      : r.usedAt ? `<span class="pill ok">odigrano ${fmtDate(r.usedAt.slice(0, 10)).replace(/^\S+ /, "")}</span>`
+      : `<button class="btn ghost" data-used="${r.id}" style="min-height:36px;padding:6px 12px;font-size:.9rem">Označi odigrano</button>`}</td></tr>`).join("")}
+    </tbody></table></div></div>`;
 }
 
 /* ---------- parent PIN ---------- */
