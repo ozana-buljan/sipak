@@ -228,7 +228,8 @@ const DAYS = [
     N("J2","Koliko brojeva iz N₀ zadovoljava x + 4 < 9?",5,{long:true}) ] }
 ];
 const CAT = { A:"Zbrajanje i oduzimanje do 20", B:"Tablica množenja", C:"Tablica dijeljenja", D:"Mjesne vrijednosti, ·/: s 10 i 100",
-  P:"Pisani računi", E:"Mjerne jedinice i novac", F:"Skupovi", G:"Algebarski izrazi", H:"Kvadrati", I:"Jednadžbe", J:"Nejednadžbe", X:"Bonus" };
+  P:"Pisani računi", E:"Mjerne jedinice i novac", F:"Skupovi", G:"Algebarski izrazi", H:"Kvadrati", I:"Jednadžbe", J:"Nejednadžbe",
+  X:"Bonus · tablica", Y:"Bonus · dijeljenje i desetice", Z:"Bonus · pisani računi i jednadžba" };
 const zrna = n => (n % 10 === 1 && n % 100 !== 11) ? "zrno" : "zrna";
 
 function factKey(x, y) { return Math.min(x, y) + "x" + Math.max(x, y); }
@@ -253,6 +254,42 @@ function bonusItems(exclude = new Set()) {
   }
   return out;
 }
+/* Bonusi u nizu (odluka 1. 11.): najviše 3 dnevno, svaki 1 zrno; težina se izmjenjuje, kraći kad je teži. */
+const EXTRA_MAX = 3;
+const LEVELS = [
+  { code: "X", name: "tablica", desc: "Pet računa iz tablice množenja." },
+  { code: "Y", name: "dijeljenje i desetice", desc: "Četiri računa s dijeljenjem i deseticama." },
+  { code: "Z", name: "pisani računi i jednadžba", desc: "Tri teža zadatka. Trebat će ti papir." } ];
+const spaced = n => n >= 1000 ? String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ") : String(n);
+const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+function factPool(exclude) {
+  const pool = [];
+  for (let a = 4; a <= 9; a++) for (let b = a; b <= 9; b++) if (!exclude.has(factKey(a, b))) pool.push(Math.random() < .5 ? [a, b] : [b, a]);
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  while (pool.length < 4) pool.push([rnd(4, 9), rnd(4, 9)]);
+  return pool;
+}
+function midItems(exclude) {
+  const [f1, f2, f3, f4] = factPool(exclude);
+  return [
+    N("Y1", `${f1[0] * f1[1]} : ${f1[0]}`, f1[1]),
+    N("Y2", `${f2[0] * 10} · ${f2[1]}`, f2[0] * f2[1] * 10, { ladder: [N("Y2a", `${f2[0]} · ${f2[1]}`, f2[0] * f2[1])] }),
+    N("Y3", `${f3[0] * f3[1]} : ${f3[1]}`, f3[0]),
+    N("Y4", `${spaced(f4[0] * f4[1] * 100)} : ${f4[0] * 10}`, f4[1] * 10, { ladder: [N("Y4a", `${f4[0] * f4[1]} : ${f4[0]}`, f4[1])] }) ];
+}
+function hardItems(exclude) {
+  const hint = { hint: "Pisani račun: riješi na papiru, upiši samo rezultat." };
+  const a = rnd(23, 89), b = rnd(13, 79);
+  const q = rnd(112, 298), d = rnd(3, 9);
+  const [f] = factPool(exclude), t = rnd(0, 2);
+  let eq;
+  if (t === 0) { const s = rnd(21, 69), x = rnd(18, 79);
+    eq = N("Z3", `x + ${s} = ${s + x}\nx = ?`, x, { ladder: [C("Z3a", "Nepoznati pribrojnik dobijemo ovako:", `${s + x} − ${s}`, [`${s + x} − ${s}`, `${s + x} + ${s}`], { long: true }), N("Z3b", `${s + x} − ${s}`, x)] }); }
+  else if (t === 1) eq = N("Z3", `${f[0]} · x = ${f[0] * f[1]}\nx = ?`, f[1], { ladder: [C("Z3a", "Nepoznati faktor dobijemo ovako:", `${f[0] * f[1]} : ${f[0]}`, [`${f[0] * f[1]} : ${f[0]}`, `${f[0] * f[1]} · ${f[0]}`], { long: true }), N("Z3b", `${f[0] * f[1]} : ${f[0]}`, f[1])] });
+  else eq = N("Z3", `x : ${f[0]} = ${f[1]}\nx = ?`, f[0] * f[1], { ladder: [C("Z3a", "Nepoznati djeljenik dobijemo ovako:", `${f[1]} · ${f[0]}`, [`${f[1]} · ${f[0]}`, `${f[1]} : ${f[0]}`], { long: true }), N("Z3b", `${f[1]} · ${f[0]}`, f[0] * f[1])] });
+  return [N("Z1", `${a} · ${b}`, a * b, hint), N("Z2", `${spaced(q * d)} : ${d}`, q, hint), eq];
+}
+function extraItems(n, exclude) { return n === 1 ? bonusItems(exclude) : n === 2 ? midItems(exclude) : hardItems(exclude); }
 
 /* ---------- helpers ---------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -427,10 +464,11 @@ function home() {
   const streakCard = `<div class="card"><div class="streak"><b>${streak}</b><span>${streak === 1 ? "dan" : "dana"} zaredom</span></div>${weekStrip(doneSet, today)}<p class="small muted">Nedjelja je odmor i ne prekida niz.</p></div>`;
   const bal = balance();
   const basketCard = `<div class="card"><div class="basket"><div><p class="label">Tvoja košarica</p><p><b>${bal.free}</b> ${zrna(bal.free)}</p></div><button class="btn" id="toRewards">Nagrade</button></div>
-    <p class="small muted">Zrno dobivaš za svaki riješen dan i bonus zadatak, a 3 zrna za cijeli tjedan. 1 zrno = 5 min Minecrafta.</p></div>`;
-  const extraDone = sessions.some(s => s.kind === "extra" && s.date === key(today) && s.completed);
+    <p class="small muted">Zrno dobivaš za svaki riješen dan i svaki bonus (do ${EXTRA_MAX} dnevno), a 3 zrna za cijeli tjedan. 1 zrno = 5 min Minecrafta.</p></div>`;
+  const ex = extrasToday();
   let main = "";
-  if (p.mode === "done") main = `<div class="card"><h2>Za danas je gotovo!</h2><p>Bravo, Lara.</p>${extraDone ? `<p class="muted">Bonus zadatak je riješen. Vidimo se sutra!</p>` : `<p>Želiš li bonus zadatak? Pet računa iz tablice množenja, donosi još jedno zrno.</p><button class="btn" id="extra">Bonus zadatak</button>`}</div>`;
+  if (p.mode === "done") main = `<div class="card"><h2>Za danas je gotovo!</h2><p>Bravo, Lara.</p>${ex.done >= EXTRA_MAX ? `<p class="muted">Riješila si sva ${EXTRA_MAX} bonusa. Vidimo se sutra!</p>`
+    : `<p>${ex.open ? "Bonus te čeka tamo gdje si stala." : `Želiš li bonus ${ex.n} od ${EXTRA_MAX}? ${LEVELS[ex.n - 1].desc}`} Donosi još jedno zrno.</p><button class="btn" id="extra">${ex.open ? "Nastavi bonus" : `Bonus ${ex.n} od ${EXTRA_MAX}`}</button>`}</div>`;
   else if (p.mode === "rest") main = `<div class="card"><h2>Nedjelja je za odmor</h2><p>Tvoja zrna su sigurna. Sutra nastavljamo.</p></div>`;
   else if (p.mode === "baselineDone") main = `<div class="card"><h2>Prvi tjedan je gotov!</h2><p>Svih pet dana je riješeno. Nova dnevna vježba stiže uskoro.</p></div>`;
   else {
@@ -446,20 +484,27 @@ function home() {
   const b = $("#start");
   if (b) b.onclick = () => startSession(p);
   const x = $("#extra");
-  if (x) x.onclick = () => startSession({ mode: "extra", session: sessions.find(s => s.kind === "extra" && s.date === key(today)) });
+  if (x) x.onclick = startExtra;
   $("#toRewards").onclick = rewardsView;
 }
+function extrasToday() {
+  const k = key(new Date()), list = sessions.filter(s => s.kind === "extra" && s.date === k);
+  const done = list.filter(s => s.completed).length, open = list.find(s => !s.completed);
+  return { done, open, n: open ? (open.extraN || 1) : done + 1 };
+}
+function startExtra() { const ex = extrasToday(); if (ex.done >= EXTRA_MAX) return home(); startSession({ mode: "extra", n: ex.n, session: ex.open }); }
 
 function startSession(p) {
   const today = new Date(), k = key(today);
   const kind = p.mode === "bonus" ? "bonus" : p.mode === "extra" ? "extra" : "baseline";
   const isB = kind !== "baseline";
   const weekAgo = new Date(today); weekAgo.setDate(weekAgo.getDate() - 6);
-  const items = isB ? (p.session?.bonusItems || bonusItems(usedFacts(sessions, kind === "extra" ? k : key(weekAgo)))) : DAYS[p.day - 1].items;
+  const n = kind === "extra" ? (p.n || 1) : null;
+  const items = isB ? (p.session?.bonusItems || (kind === "extra" ? extraItems(n, usedFacts(sessions, k)) : bonusItems(usedFacts(sessions, key(weekAgo))))) : DAYS[p.day - 1].items;
   const s = p.session && !p.session.completed ? JSON.parse(JSON.stringify(p.session)) : {
-    id: kind === "extra" ? k + "-bonus" : k, date: k, kind, day: kind === "baseline" ? p.day : null, startedAt: new Date().toISOString(),
+    id: kind === "extra" ? k + "-bonus" + (n > 1 ? n : "") : k, date: k, kind, day: kind === "baseline" ? p.day : null, startedAt: new Date().toISOString(),
     completed: false, answers: [], photos: [], mood: null, activeMs: 0,
-    bonusItems: isB ? items : undefined };
+    bonusItems: isB ? items : undefined, ...(n ? { extraN: n, level: LEVELS[n - 1].code } : {}) };
   const answered = new Set(s.answers.filter(a => !a.ladderOf).map(a => a.id));
   const queue = items.filter(it => !answered.has(it.id)).map(it => ({ ...it }));
   run = { s, queue, total: items.length, mainDone: answered.size, t0: performance.now(), activeAtStart: s.activeMs || 0, pauseTotal: 0, paused: null };
@@ -590,18 +635,22 @@ function doneLine(sess) {
   const main = sess.answers.filter(x => !x.ladderOf).length, lad = sess.answers.filter(x => x.ladderOf).length;
   const z = n => n === 1 ? "zadatak" : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? "zadatka" : "zadataka";
   const q = n => n === 1 ? "kratko pitanje" : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? "kratka pitanja" : "kratkih pitanja";
-  return `Danas si prošla kroz <b>${main}</b> ${z(main)}${lad ? ` i <b>${lad}</b> ${q(lad)}` : ""}.`;
+  return `${sess.kind === "extra" ? "U ovom bonusu si prošla kroz" : "Danas si prošla kroz"} <b>${main}</b> ${z(main)}${lad ? ` i <b>${lad}</b> ${q(lad)}` : ""}.`;
 }
 function endStep() {
   const doneSet = new Set(sessions.filter(s => s.completed).map(s => s.date));
   const streak = computeStreak(doneSet, new Date());
-  shell(`<div class="card"><h2>${run.cut ? "Dosta za danas!" : "Gotovo za danas!"}</h2>
+  const isX = run.s.kind === "extra", ex = isX ? extrasToday() : null;
+  const more = isX && ex.done < EXTRA_MAX;
+  shell(`<div class="card"><h2>${isX ? (ex.done >= EXTRA_MAX ? "Dosta za danas!" : "Bonus je gotov!") : run.cut ? "Dosta za danas!" : "Gotovo za danas!"}</h2>
     <div class="streak"><b>${streak}</b><span>${streak === 1 ? "dan" : "dana"} zaredom</span></div>${weekStrip(doneSet, new Date())}
     <p class="donecount">${doneLine(run.s)}</p>
-    <p>${run.s.kind === "extra" ? "Bonus je gotov. Još jedno zrno je u košarici!" : "Bravo, Lara! Novo zrno je u košarici."}</p>
+    <p>${isX ? `Još jedno zrno je u košarici!${ex.done >= EXTRA_MAX ? ` Riješila si sva ${EXTRA_MAX} bonusa danas.` : ""}` : "Bravo, Lara! Novo zrno je u košarici."}</p>
+    ${more ? `<p class="small muted">Sljedeći: ${LEVELS[ex.n - 1].desc}</p><button class="btn" id="more">Bonus ${ex.n} od ${EXTRA_MAX}</button>` : ""}
     <button class="btn ghost" id="back">Natrag na početak</button></div>`);
   run = null;
   $("#back").onclick = home;
+  if (more) $("#more").onclick = startExtra;
 }
 
 /* ---------- rewards view (Lara) ---------- */
@@ -634,7 +683,7 @@ function weekLabel(monKey) { const [y, m, d] = monKey.split("-").map(Number); co
 function parent() {
   const today = new Date(), k = key(today);
   const t = sessions.find(s => s.date === k && s.kind !== "extra");
-  const status = t?.completed ? ["var(--leaf)", "Danas je riješeno", `${t.answers.filter(a=>!a.ladderOf).length} zadataka, ${Math.round((t.activeMs||0)/60000)} min`]
+  const status = t?.completed ? ["var(--leaf)", "Danas je riješeno", `${t.answers.filter(a=>!a.ladderOf).length} zadataka, ${Math.round((t.activeMs||0)/60000)} min${extrasToday().done ? ` · bonusi: ${extrasToday().done} od ${EXTRA_MAX}` : ""}`]
     : t ? ["var(--warn)", "Danas je započeto, nije dovršeno", `${t.answers.filter(a=>!a.ladderOf).length} zadataka do sada`]
     : today.getDay() === 0 ? ["var(--muted)", "Nedjelja: pauza", ""] : ["var(--seed)", "Danas još nije riješeno", ""];
   const doneBaseline = sessions.filter(s => s.kind === "baseline" && s.completed).length;
@@ -717,7 +766,7 @@ function parentHistory() {
 function dayCard(s, open) {
   const main = s.answers.filter(a => !a.ladderOf), ok = main.filter(a => a.correct).length, sk = main.filter(a => a.skipped).length;
   const mood = { 1: "😟 teško", 2: "😐 onako", 3: "😊 dobro" }[s.mood];
-  const kind = s.kind === "bonus" ? "Subotnji bonus" : s.kind === "extra" ? "Bonus zadatak" : `Baseline dan ${s.day}`;
+  const kind = s.kind === "bonus" ? "Subotnji bonus" : s.kind === "extra" ? `Bonus ${s.extraN || 1} · ${LEVELS[(s.extraN || 1) - 1].name}` : `Baseline dan ${s.day}`;
   const pauseMs = (s.pauses || []).reduce((a, x) => a + x.ms, 0);
   const groups = {};
   for (const a of main) { const c = a.id.match(/^[A-Z]/)[0]; (groups[c] ||= []).push(a); }
@@ -733,7 +782,7 @@ function dayCard(s, open) {
     <div class="tablebox"><table><thead><tr><th>Zadatak</th><th>Točno</th><th>Lara</th><th>Ishod</th><th>Vrijeme</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
 }
 function daysView() {
-  const list = [...sessions].sort((a, b) => b.date.localeCompare(a.date) || (a.kind === "extra" ? 1 : -1));
+  const list = [...sessions].sort((a, b) => b.date.localeCompare(a.date) || (a.kind === "extra" ? (a.extraN || 1) : 0) - (b.kind === "extra" ? (b.extraN || 1) : 0));
   let lastWeek = "", html = "";
   list.forEach((s, i) => { const wk = key(mondayOf(s.date)); if (wk !== lastWeek) { html += `<h3 class="weekhead">${weekLabel(wk)}</h3>`; lastWeek = wk; } html += dayCard(s, i === 0); });
   parentShell("#dani", html || `<div class="card"><p class="muted">Još nema riješenih dana.</p></div>`);
