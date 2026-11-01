@@ -174,11 +174,12 @@ tr.lad td:first-child { padding-left: 22px; color: var(--muted); }
 details summary { cursor: pointer; font-weight: 700; }
 .status { display: flex; align-items: center; gap: 12px; }
 .status .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
-/* Lara: odakle su zrna (1. 11.) */
-.mosaic { display: flex; flex-wrap: wrap; gap: 4px; }
-.mosaic svg { width: 20px; height: 23px; animation: pop .35s cubic-bezier(.3,1.6,.5,1) both; }
-.mosaic .more { font: 700 .85rem var(--f-display); color: var(--muted); align-self: center; margin-left: 4px; }
-@keyframes pop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+/* Lara: košarica (1. 11.) */
+.seedcount { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.seedcount > div { display: grid; grid-template-columns: auto auto; justify-content: start; align-items: center; column-gap: 8px; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.seedcount svg { width: 26px; height: 30px; grid-row: span 2; }
+.seedcount b { font: 800 1.8rem/1 var(--f-display); color: var(--garnet); font-variant-numeric: tabular-nums; }
+.seedcount span { font-size: .9rem; color: var(--muted); }
 .src-rows { display: flex; flex-direction: column; }
 .src-row { display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--line); }
 .src-row b { font-family: var(--f-display); font-variant-numeric: tabular-nums; }
@@ -496,8 +497,7 @@ function home() {
   const p = plan(today, sessions);
   const streakCard = `<div class="card"><div class="streak"><b>${streak}</b><span>${streak === 1 ? "dan" : "dana"} zaredom</span></div>${weekStrip(doneSet, today)}${streakNote(doneSet, today)}</div>`;
   const bal = balance();
-  const basketCard = `<div class="card"><div class="basket"><div><p class="label">Tvoja košarica</p><p><b>${bal.free}</b> ${zrna(bal.free)}</p></div><button class="btn" id="toRewards">Nagrade</button></div>
-    <p class="small muted">Dnevni zadatak donosi ${DAY_ZRNA} zrna, svaki bonus 1 (do ${EXTRA_MAX} dnevno), a cijeli tjedan još 3. 1 zrno = 5 min Minecrafta.</p></div>`;
+  const basketCard = basketBreakdown(bal);
   const ex = extrasToday();
   let main = "";
   if (p.mode === "done") main = `<div class="card"><h2>Za danas je gotovo!</h2><p>Bravo, Lara.</p>${ex.done >= EXTRA_MAX ? `<p class="muted">Riješila si sva ${EXTRA_MAX} bonusa. Vidimo se sutra!</p>`
@@ -514,7 +514,7 @@ function home() {
       <ul class="rules"><li>Uzmi papir i tamnu olovku. Računaj na papiru, ovdje upiši samo rezultat.</li><li>Svaki zadatak piši u svom dijelu stranice.</li><li>Ako ne znaš, slobodno preskoči.</li></ul>
       <button class="btn" id="start">${p.session ? "Nastavi" : "Kreni"}</button></div>`;
   }
-  shell(`<div><h1>Bok, Lara!</h1></div>${main}${basketCard}${streakCard}`);
+  shell(`<div><h1>Bok, Lara!</h1></div>${main}${streakCard}${basketCard}`);
   const b = $("#start");
   if (b) b.onclick = () => startSession(p);
   const x = $("#extra");
@@ -689,17 +689,18 @@ function endStep() {
   if (more) $("#more").onclick = startExtra;
 }
 
-/* ---------- odakle su zrna (Lara), pojednostavljeno 1. 11. ---------- */
-const miniSeed = (used, i) => `<svg viewBox="0 0 26 30" aria-hidden="true" style="animation-delay:${Math.min(i, 60) * 18}ms"><path d="M13 3c7 5 9 12 7 17a7.5 7.5 0 0 1-14 0C4 15 6 8 13 3z" fill="${used ? "none" : "var(--seed)"}" stroke="var(--seed)" stroke-width="2"/></svg>`;
-function sourcesCard() {
-  const e = earnings(sessions), bal = balance(), total = e.total; if (!total) return "";
+/* ---------- košarica na početnom ekranu (Lara), 1. 11. ---------- */
+const miniSeed = used => `<svg viewBox="0 0 26 30" aria-hidden="true"><path d="M13 3c7 5 9 12 7 17a7.5 7.5 0 0 1-14 0C4 15 6 8 13 3z" fill="${used ? "none" : "var(--seed)"}" stroke="var(--seed)" stroke-width="2"/></svg>`;
+function basketBreakdown(bal) {
+  const e = earnings(sessions), total = e.total;
   const rows = [["Dnevni zadaci", e.days * DAY_ZRNA], ["Bonusi", e.extras], ["Subote", e.sats], ["Niz i puni tjedni", e.weeks * 3 + e.msZ]].filter(r => r[1]);
-  const used = bal.spent, CAP = 120, min = used * 5;
-  const seeds = Array.from({ length: Math.min(total, CAP) }, (_, i) => miniSeed(i < used, i)).join("");
-  return `<div class="card src"><h2>Zaradila si ${total} ${zrna(total)}!</h2>
-    <div class="mosaic" role="img" aria-label="${total} zarađenih zrna, ${used} pretvoreno u Minecraft">${seeds}${total > CAP ? `<span class="more">+${total - CAP}</span>` : ""}</div>
-    <div class="src-rows">${rows.map(([l, n]) => `<div class="src-row"><span>${l}</span><b>${n}</b></div>`).join("")}</div>
-    ${used ? `<p class="small muted">Prazna zrna si pretvorila u Minecraft: ${min >= 60 ? (min / 60).toFixed(min % 60 ? 1 : 0).replace(".", ",") + " h" : min + " min"}.</p>` : ""}</div>`;
+  return `<div class="card"><div><p class="label">Tvoja košarica</p><h2>Zaradila si ${total} ${zrna(total)}!</h2></div>
+    <div class="seedcount"><div>${miniSeed(false)}<b>× ${bal.free}</b><span>možeš iskoristiti</span></div>
+      <div>${miniSeed(true)}<b>× ${bal.spent}</b><span>iskorišteno</span></div></div>
+    ${bal.held ? `<p class="small muted">${bal.held} ${zrna(bal.held)} ${bal.held % 10 >= 2 && bal.held % 10 <= 4 && (bal.held % 100 < 12 || bal.held % 100 > 14) ? "čekaju" : "čeka"} mamino odobrenje.</p>` : ""}
+    ${rows.length ? `<div class="src-rows">${rows.map(([l, n]) => `<div class="src-row"><span>${l}</span><b>${n}</b></div>`).join("")}</div>` : ""}
+    <button class="btn" id="toRewards">Nagrade</button>
+    <p class="small muted">Dnevni zadatak donosi ${DAY_ZRNA} zrna, svaki bonus 1 (do ${EXTRA_MAX} dnevno), a cijeli tjedan još 3. 1 zrno = 5 min Minecrafta.</p></div>`;
 }
 /* ---------- rewards view (Lara) ---------- */
 function rewardsView() {
@@ -709,7 +710,6 @@ function rewardsView() {
   shell(`<div class="card"><div class="basket"><div><p class="label">Tvoja košarica</p><p><b>${bal.free}</b> ${zrna(bal.free)}</p></div></div></div>
     <div class="card"><h2>Nagrade</h2>${REWARDS.map(r => `<div class="reward"><div><h3>${esc(r.label)}</h3><p class="small muted">${r.cost} ${zrna(r.cost)}</p></div><button class="btn" data-r="${r.id}" ${bal.free < r.cost ? "disabled" : ""}>Zatraži</button></div>`).join("")}
       <p class="small muted" id="rmsg" role="status">Mama odobrava svaku nagradu. Zrna se oduzimaju tek kad odobri.</p></div>
-    ${sourcesCard()}
     ${pend.length ? `<div class="card"><h3>Čeka odobrenje</h3>${pend.map(r => `<p>${esc(r.label)} · ${r.cost} ${zrna(r.cost)}</p>`).join("")}</div>` : ""}
     ${hist.length ? `<div class="card"><h3>Prije</h3>${hist.map(r => `<p class="small">${esc(r.label)} · ${r.status === "approved" ? (r.usedAt ? "odigrano" : "odobreno") : "nije odobreno"}</p>`).join("")}</div>` : ""}
     <button class="btn ghost" id="back">Natrag</button>`);
