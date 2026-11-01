@@ -175,26 +175,13 @@ details summary { cursor: pointer; font-weight: 700; }
 .status { display: flex; align-items: center; gap: 12px; }
 .status .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
 /* Lara: odakle su zrna (1. 11.) */
-.src { gap: 16px; background: linear-gradient(160deg, var(--seed-soft), var(--card) 55%); }
-.src h2 { font-size: 1.35rem; }
-.mosaic { display: flex; flex-wrap: wrap; gap: 4px; padding: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+.mosaic { display: flex; flex-wrap: wrap; gap: 4px; }
 .mosaic svg { width: 20px; height: 23px; animation: pop .35s cubic-bezier(.3,1.6,.5,1) both; }
 .mosaic .more { font: 700 .85rem var(--f-display); color: var(--muted); align-self: center; margin-left: 4px; }
 @keyframes pop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-.src-rows { display: flex; flex-direction: column; gap: 10px; }
-.src-row { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; }
-.src-row svg { width: 26px; height: 30px; }
-.src-row .lbl { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.src-row .lbl span { font-weight: 700; }
-.src-row .track { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
-.src-row .track i { display: block; height: 100%; border-radius: 99px; }
-.src-row .n { font: 800 1.6rem var(--f-display); font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right; }
-.src-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.src-tile { border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
-.src-tile b { font: 800 2rem/1.05 var(--f-display); font-variant-numeric: tabular-nums; }
-.src-tile.bask { background: var(--seed-soft); color: var(--garnet); }
-.src-tile.mc { background: var(--leaf-soft); color: var(--leaf); }
-.src-tile span { font-size: .9rem; color: var(--ink); opacity: .85; }
+.src-rows { display: flex; flex-direction: column; }
+.src-row { display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--line); }
+.src-row b { font-family: var(--f-display); font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 
@@ -702,29 +689,17 @@ function endStep() {
   if (more) $("#more").onclick = startExtra;
 }
 
-/* ---------- odakle su zrna (Lara) ---------- */
-const SOURCES = [
-  { k: "day", label: "Dnevni zadaci", color: "var(--garnet)" },
-  { k: "extra", label: "Bonusi", color: "var(--seed)" },
-  { k: "sat", label: "Subote", color: "var(--warn)" },
-  { k: "streak", label: "Niz i puni tjedni", color: "var(--leaf)" } ];
-const miniSeed = (color, state, i) => `<svg viewBox="0 0 26 30" aria-hidden="true" style="animation-delay:${Math.min(i, 60) * 18}ms"><path d="M13 3c7 5 9 12 7 17a7.5 7.5 0 0 1-14 0C4 15 6 8 13 3z" fill="${state ? "none" : color}" stroke="${color}" stroke-width="2"${state === "held" ? ' stroke-dasharray="3 2.5"' : ""}/></svg>`;
+/* ---------- odakle su zrna (Lara), pojednostavljeno 1. 11. ---------- */
+const miniSeed = (used, i) => `<svg viewBox="0 0 26 30" aria-hidden="true" style="animation-delay:${Math.min(i, 60) * 18}ms"><path d="M13 3c7 5 9 12 7 17a7.5 7.5 0 0 1-14 0C4 15 6 8 13 3z" fill="${used ? "none" : "var(--seed)"}" stroke="var(--seed)" stroke-width="2"/></svg>`;
 function sourcesCard() {
-  const e = earnings(sessions), bal = balance();
-  const v = { day: e.days * DAY_ZRNA, extra: e.extras, sat: e.sats, streak: e.weeks * 3 + e.msZ };
-  const total = e.total; if (!total) return "";
-  const conv = bal.spent, max = Math.max(...Object.values(v), 1), CAP = 120;
-  let seeds = [], i = 0;
-  for (const s of SOURCES) for (let j = 0; j < v[s.k]; j++) seeds.push(s.color);
-  const shown = seeds.slice(0, CAP).map((c, idx) => miniSeed(c, idx < conv ? "used" : idx < conv + bal.held ? "held" : null, i++)).join("");
-  const min = conv * 5;
-  return `<div class="card src"><div><p class="label">Tvoja zrna</p><h2>Zaradila si ${total} ${zrna(total)}!</h2></div>
-    <div class="mosaic" role="img" aria-label="${total} zarađenih zrna, ${conv} pretvoreno u Minecraft">${shown}${seeds.length > CAP ? `<span class="more">+${seeds.length - CAP}</span>` : ""}</div>
-    ${conv || bal.held ? `<p class="small muted">${[conv ? "Prazna zrna si već pretvorila u Minecraft." : "", bal.held ? `Isprekidana (${bal.held}) čekaju da mama odobri.` : ""].filter(Boolean).join(" ")}</p>` : ""}
-    <div class="src-rows">${SOURCES.map(s => `<div class="src-row">${miniSeed(s.color, null, 0)}<div class="lbl"><span>${s.label}</span><div class="track"><i style="width:${v[s.k] / max * 100}%;background:${s.color}"></i></div></div><span class="n" style="color:${s.color}">${v[s.k]}</span></div>`).join("")}</div>
-    <div class="src-tiles"><div class="src-tile bask"><b>${bal.free}</b><span>${zrna(bal.free)} u košarici</span></div>
-      <div class="src-tile mc"><b>${min >= 60 ? (min / 60).toFixed(min % 60 ? 1 : 0).replace(".", ",") + " h" : min + " min"}</b><span>pretvoreno u Minecraft</span></div></div>
-    ${!e.msZ ? `<p class="small muted">Niz od 10 dana donosi još +5 zrna.</p>` : ""}</div>`;
+  const e = earnings(sessions), bal = balance(), total = e.total; if (!total) return "";
+  const rows = [["Dnevni zadaci", e.days * DAY_ZRNA], ["Bonusi", e.extras], ["Subote", e.sats], ["Niz i puni tjedni", e.weeks * 3 + e.msZ]].filter(r => r[1]);
+  const used = bal.spent, CAP = 120, min = used * 5;
+  const seeds = Array.from({ length: Math.min(total, CAP) }, (_, i) => miniSeed(i < used, i)).join("");
+  return `<div class="card src"><h2>Zaradila si ${total} ${zrna(total)}!</h2>
+    <div class="mosaic" role="img" aria-label="${total} zarađenih zrna, ${used} pretvoreno u Minecraft">${seeds}${total > CAP ? `<span class="more">+${total - CAP}</span>` : ""}</div>
+    <div class="src-rows">${rows.map(([l, n]) => `<div class="src-row"><span>${l}</span><b>${n}</b></div>`).join("")}</div>
+    ${used ? `<p class="small muted">Prazna zrna si pretvorila u Minecraft: ${min >= 60 ? (min / 60).toFixed(min % 60 ? 1 : 0).replace(".", ",") + " h" : min + " min"}.</p>` : ""}</div>`;
 }
 /* ---------- rewards view (Lara) ---------- */
 function rewardsView() {
