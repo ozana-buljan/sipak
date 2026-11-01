@@ -418,15 +418,16 @@ async function writeRequest(r) {
   try { await db.doc("requests/" + id).set(body); return true; } catch (_) { return false; }
 }
 function mondayOf(k) { const [y,m,d] = k.split("-").map(Number); const dt = new Date(y, m-1, d); dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7)); return dt; }
+const DAY_ZRNA = 3; // glavni dnevni zadatak (odluka 1. 11., vrijedi i unatrag); subotnji bonus i dodatni bonusi po 1
 function earnings(list) {
   const done = list.filter(s => s.completed);
   const daySet = new Set(done.filter(s => s.kind !== "extra").map(s => s.date));
-  const days = daySet.size, extras = done.filter(s => s.kind === "extra").length;
+  const sats = new Set(done.filter(s => s.kind === "bonus").map(s => s.date)).size, days = daySet.size - sats, extras = done.filter(s => s.kind === "extra").length;
   let weeks = 0; const seen = new Set();
   for (const k of daySet) { const mon = mondayOf(k), mk = key(mon); if (seen.has(mk)) continue; seen.add(mk);
     let full = true; for (let i = 0; i < 5; i++) { const d = new Date(mon); d.setDate(mon.getDate() + i); if (!daySet.has(key(d))) { full = false; break; } }
     if (full) weeks++; }
-  return { days, extras, weeks, total: days + extras + weeks * 3 };
+  return { days, sats, extras, weeks, total: days * DAY_ZRNA + sats + extras + weeks * 3 };
 }
 function balance() {
   const e = earnings(sessions).total;
@@ -464,7 +465,7 @@ function home() {
   const streakCard = `<div class="card"><div class="streak"><b>${streak}</b><span>${streak === 1 ? "dan" : "dana"} zaredom</span></div>${weekStrip(doneSet, today)}<p class="small muted">Nedjelja je odmor i ne prekida niz. Niz broji dnevne zadatke, ne bonuse.</p></div>`;
   const bal = balance();
   const basketCard = `<div class="card"><div class="basket"><div><p class="label">Tvoja košarica</p><p><b>${bal.free}</b> ${zrna(bal.free)}</p></div><button class="btn" id="toRewards">Nagrade</button></div>
-    <p class="small muted">Zrno dobivaš za svaki riješen dan i svaki bonus (do ${EXTRA_MAX} dnevno), a 3 zrna za cijeli tjedan. 1 zrno = 5 min Minecrafta.</p></div>`;
+    <p class="small muted">Dnevni zadatak donosi ${DAY_ZRNA} zrna, svaki bonus 1 (do ${EXTRA_MAX} dnevno), a cijeli tjedan još 3. 1 zrno = 5 min Minecrafta.</p></div>`;
   const ex = extrasToday();
   let main = "";
   if (p.mode === "done") main = `<div class="card"><h2>Za danas je gotovo!</h2><p>Bravo, Lara.</p>${ex.done >= EXTRA_MAX ? `<p class="muted">Riješila si sva ${EXTRA_MAX} bonusa. Vidimo se sutra!</p>`
@@ -646,7 +647,7 @@ function endStep() {
   shell(`<div class="card"><h2>${isX ? (ex.done >= EXTRA_MAX ? "Dosta za danas!" : "Bonus je gotov!") : run.cut ? "Dosta za danas!" : "Gotovo za danas!"}</h2>
     <div class="streak"><b>${streak}</b><span>${streak === 1 ? "dan" : "dana"} zaredom</span></div>${weekStrip(doneSet, new Date())}
     <p class="donecount">${doneLine(run.s)}</p>
-    <p>${isX ? `Još jedno zrno je u košarici!${ex.done >= EXTRA_MAX ? ` Riješila si sva ${EXTRA_MAX} bonusa danas.` : ""}` : "Bravo, Lara! Novo zrno je u košarici."}</p>
+    <p>${isX ? `Još jedno zrno je u košarici!${ex.done >= EXTRA_MAX ? ` Riješila si sva ${EXTRA_MAX} bonusa danas.` : ""}` : (run.s.kind === "bonus" ? "Bravo, Lara! Novo zrno je u košarici." : `Bravo, Lara! ${DAY_ZRNA} nova zrna su u košarici.`)}</p>
     ${more ? `<p class="small muted">Sljedeći: ${LEVELS[ex.n - 1].desc}</p><button class="btn" id="more">Bonus ${ex.n} od ${EXTRA_MAX}</button>` : ""}
     <button class="btn ghost" id="back">Natrag na početak</button></div>`);
   run = null;
@@ -743,7 +744,7 @@ function parentRewards() {
     <div class="zr-bar" role="img" aria-label="Od ${bal.earned} zarađenih zrna: ${bal.spent} potrošeno, ${bal.held} na čekanju, ${bal.free} slobodno">
       <i class="sp" style="width:${pct(bal.spent)}%"></i><i class="hd" style="width:${pct(bal.held)}%"></i><i class="fr" style="width:${pct(bal.free)}%"></i></div>
     <div class="zr-legend"><span><i class="sp"></i>Potrošeno <b>${bal.spent}</b></span><span><i class="hd"></i>Na čekanju <b>${bal.held}</b></span><span><i class="fr"></i>Slobodno <b>${bal.free}</b></span></div>
-    <div class="zr-chips"><span class="chip">Riješeni dani <b>${e.days}</b></span><span class="chip">Bonusi <b>${e.extras}</b></span><span class="chip">Puni tjedni <b>${e.weeks}</b> × 3</span></div>
+    <div class="zr-chips"><span class="chip">Riješeni dani <b>${e.days}</b> × ${DAY_ZRNA}</span>${e.sats ? `<span class="chip">Subote <b>${e.sats}</b></span>` : ""}<span class="chip">Bonusi <b>${e.extras}</b></span><span class="chip">Puni tjedni <b>${e.weeks}</b> × 3</span></div>
     ${owed ? `<div class="zr-owed"><span>${seedSvg("done")}</span><div><b>Duguješ ${owed} min Minecrafta</b><p class="small">Odobreno, a još nije odigrano. Označi u tablici ispod kad odigra.</p></div></div>` : ""}
   </div>
   <div class="card"><div class="zr-head"><h3>Čeka tvoje odobrenje</h3>${pend.length ? `<span class="pill no">${pend.length}</span>` : ""}</div>
