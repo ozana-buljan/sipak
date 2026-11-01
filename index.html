@@ -303,6 +303,7 @@ const fmtDate = k => { const [y,m,d] = k.split("-").map(Number); const dt = new 
 
 const LOGO = `<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M15 7 l2 4 3-5 3 5 2-4 1 6 h-12z" fill="var(--leaf)"/><circle cx="20" cy="23" r="14" fill="var(--garnet)"/><g fill="var(--seed-soft)"><ellipse cx="15" cy="21" rx="2.2" ry="2.8"/><ellipse cx="21" cy="19" rx="2.2" ry="2.8"/><ellipse cx="25" cy="25" rx="2.2" ry="2.8"/><ellipse cx="18" cy="27" rx="2.2" ry="2.8"/></g></svg>`;
 const seedSvg = (state) => {
+  if (state === "shield") return `<svg viewBox="0 0 26 30" aria-label="Zaštićen dan"><path d="M13 3l8 3v7c0 6-4 10-8 12-4-2-8-6-8-12V6z" fill="var(--leaf-soft)" stroke="var(--leaf)" stroke-width="1.5"/><path d="M9.5 14l2.5 2.5 4.5-5" fill="none" stroke="var(--leaf)" stroke-width="1.6" stroke-linecap="round"/></svg>`;
   if (state === "rest") return `<svg viewBox="0 0 26 30" aria-hidden="true"><path d="M13 4c6 6 8 12 0 22C5 16 7 10 13 4z" fill="var(--leaf-soft)" stroke="var(--leaf)" stroke-width="1.5"/></svg>`;
   const fill = state === "done" ? "var(--seed)" : "transparent";
   return `<svg viewBox="0 0 26 30" aria-hidden="true"><path d="M13 3c7 5 9 12 7 17a7.5 7.5 0 0 1-14 0C4 15 6 8 13 3z" fill="${fill}" stroke="var(--seed)" stroke-width="1.6" ${state==="today"?'stroke-dasharray="3 2.5"':''}/></svg>`;
@@ -378,24 +379,46 @@ async function loadSessions() {
 }
 
 /* ---------- streak ---------- */
-function computeStreak(doneSet, today) {
-  let n = 0; const d = new Date(today);
-  if (!doneSet.has(key(d))) d.setDate(d.getDate() - 1);
-  for (let i = 0; i < 500; i++) {
-    const wd = d.getDay();
-    if (doneSet.has(key(d))) n++;
-    else if (wd !== 0 && wd !== 6) break;
-    d.setDate(d.getDate() - 1);
+/* Niz (odluka 1. 11.): prekretnice sa zrnima + zaštita niza.
+   - 10 dana zaredom = +5 zrna, 20 = +10, zatim svakih daljnjih 10 dana +10. Novi niz opet može doći do prekretnica.
+   - Zaštita: prvi propušteni radni dan u kalendarskom mjesecu ne prekida niz (automatski).
+   - Dan koji roditelj označi kao opravdan (bolest) ne prekida niz i ne troši mjesečnu zaštitu.
+   Zaštićen dan ne povećava niz. Subota i nedjelja nikad ne prekidaju niz. */
+let excused = new Set();
+const milestoneZrna = n => n === 10 ? 5 : (n >= 20 && n % 10 === 0) ? 10 : 0;
+function nextMilestone(n) { let m = n + 1; while (!milestoneZrna(m)) m++; return { at: m, zrna: milestoneZrna(m) }; }
+function streakInfo(doneSet, today) {
+  const tk = key(today), keys = [...doneSet].sort();
+  const res = { streak: 0, milestones: [], shielded: new Map(), freezeUsed: new Set() };
+  if (!keys.length) return res;
+  const [y, m, dd] = keys[0].split("-").map(Number); const d = new Date(y, m - 1, dd);
+  for (let i = 0; i < 3000; i++) {
+    const k = key(d); if (k > tk) break;
+    const wd = d.getDay(), mon = k.slice(0, 7);
+    if (doneSet.has(k)) { res.streak++; const z = milestoneZrna(res.streak); if (z) res.milestones.push({ date: k, n: res.streak, zrna: z }); }
+    else if (wd === 0 || wd === 6 || k === tk) {}
+    else if (excused.has(k)) res.shielded.set(k, "opravdano");
+    else if (!res.freezeUsed.has(mon)) { res.freezeUsed.add(mon); res.shielded.set(k, "zaštita"); }
+    else res.streak = 0;
+    d.setDate(d.getDate() + 1);
   }
-  return n;
+  return res;
+}
+function computeStreak(doneSet, today) { return streakInfo(doneSet, today).streak; }
+function mainDoneSet(list) { return new Set(list.filter(s => s.completed && s.kind !== "extra").map(s => s.date)); }
+function streakNote(doneSet, today) {
+  const si = streakInfo(doneSet, today), nx = nextMilestone(si.streak), left = nx.at - si.streak;
+  const freeLeft = !si.freezeUsed.has(key(today).slice(0, 7));
+  return `<p class="small">Još <b>${left}</b> ${left === 1 ? "dan" : "dana"} do nagrade za niz: <b>+${nx.zrna}</b> zrna.</p>
+    <p class="small muted">${freeLeft ? "Zaštita niza: ovaj mjesec jedan propušteni dan ne prekida niz." : "Zaštita niza za ovaj mjesec je iskorištena."} Subota i nedjelja ne prekidaju niz.</p>`;
 }
 function weekStrip(doneSet, today) {
   const start = new Date(today); const wd = (start.getDay() + 6) % 7; start.setDate(start.getDate() - wd);
-  let h = "";
+  let h = ""; const sh = streakInfo(doneSet, today).shielded;
   for (let i = 0; i < 7; i++) {
     const d = new Date(start); d.setDate(start.getDate() + i);
     const k = key(d), isToday = k === key(today);
-    const st = doneSet.has(k) ? "done" : (d.getDay() === 0 ? "rest" : (isToday ? "today" : "empty"));
+    const st = doneSet.has(k) ? "done" : sh.has(k) ? "shield" : (d.getDay() === 0 ? "rest" : (isToday ? "today" : "empty"));
     h += `<div>${seedSvg(st)}<span>${DAYNAMES[d.getDay()]}</span></div>`;
   }
   return `<div class="week">${h}</div>`;
@@ -427,7 +450,8 @@ function earnings(list) {
   for (const k of daySet) { const mon = mondayOf(k), mk = key(mon); if (seen.has(mk)) continue; seen.add(mk);
     let full = true; for (let i = 0; i < 5; i++) { const d = new Date(mon); d.setDate(mon.getDate() + i); if (!daySet.has(key(d))) { full = false; break; } }
     if (full) weeks++; }
-  return { days, sats, extras, weeks, total: days * DAY_ZRNA + sats + extras + weeks * 3 };
+  const ms = streakInfo(daySet, new Date()).milestones, msZ = ms.reduce((a, x) => a + x.zrna, 0);
+  return { days, sats, extras, weeks, milestones: ms, msZ, total: days * DAY_ZRNA + sats + extras + weeks * 3 + msZ };
 }
 function balance() {
   const e = earnings(sessions).total;
@@ -462,7 +486,7 @@ function home() {
   const doneSet = new Set(sessions.filter(s => s.completed && s.kind !== "extra").map(s => s.date));
   const streak = computeStreak(doneSet, today);
   const p = plan(today, sessions);
-  const streakCard = `<div class="card"><div class="streak"><b>${streak}</b><span>${streak === 1 ? "dan" : "dana"} zaredom</span></div>${weekStrip(doneSet, today)}<p class="small muted">Nedjelja je odmor i ne prekida niz. Niz broji dnevne zadatke, ne bonuse.</p></div>`;
+  const streakCard = `<div class="card"><div class="streak"><b>${streak}</b><span>${streak === 1 ? "dan" : "dana"} zaredom</span></div>${weekStrip(doneSet, today)}${streakNote(doneSet, today)}</div>`;
   const bal = balance();
   const basketCard = `<div class="card"><div class="basket"><div><p class="label">Tvoja košarica</p><p><b>${bal.free}</b> ${zrna(bal.free)}</p></div><button class="btn" id="toRewards">Nagrade</button></div>
     <p class="small muted">Dnevni zadatak donosi ${DAY_ZRNA} zrna, svaki bonus 1 (do ${EXTRA_MAX} dnevno), a cijeli tjedan još 3. 1 zrno = 5 min Minecrafta.</p></div>`;
@@ -643,10 +667,12 @@ function endStep() {
   const doneSet = new Set(sessions.filter(s => s.completed && s.kind !== "extra").map(s => s.date));
   const streak = computeStreak(doneSet, new Date());
   const isX = run.s.kind === "extra", ex = isX ? extrasToday() : null;
+  const hit = !isX && streakInfo(doneSet, new Date()).milestones.find(m => m.date === run.s.date);
   const more = isX && ex.done < EXTRA_MAX;
   shell(`<div class="card"><h2>${isX ? (ex.done >= EXTRA_MAX ? "Dosta za danas!" : "Bonus je gotov!") : run.cut ? "Dosta za danas!" : "Gotovo za danas!"}</h2>
     <div class="streak"><b>${streak}</b><span>${streak === 1 ? "dan" : "dana"} zaredom</span></div>${weekStrip(doneSet, new Date())}
     <p class="donecount">${doneLine(run.s)}</p>
+    ${hit ? `<div class="zr-owed"><span>${seedSvg("done")}</span><div><b>${hit.n} dana zaredom!</b><p class="small">Nagrada za niz: +${hit.zrna} zrna u košarici.</p></div></div>` : ""}
     <p>${isX ? `Još jedno zrno je u košarici!${ex.done >= EXTRA_MAX ? ` Riješila si sva ${EXTRA_MAX} bonusa danas.` : ""}` : (run.s.kind === "bonus" ? "Bravo, Lara! Novo zrno je u košarici." : `Bravo, Lara! ${DAY_ZRNA} nova zrna su u košarici.`)}</p>
     ${more ? `<p class="small muted">Sljedeći: ${LEVELS[ex.n - 1].desc}</p><button class="btn" id="more">Bonus ${ex.n} od ${EXTRA_MAX}</button>` : ""}
     <button class="btn ghost" id="back">Natrag na početak</button></div>`);
@@ -710,6 +736,7 @@ function parent() {
     <div><h1>Za roditelja</h1></div>${parentTabs("#roditelj")}
     <div class="card"><div class="status"><span class="dot" style="background:${status[0]}"></span><div><h3>${status[1]}</h3>${status[2] ? `<p class="small muted">${status[2]}</p>` : ""}</div></div>
       <p class="small">Baseline: ${doneBaseline} od ${DAYS.length} dana · niz: ${computeStreak(doneSet, today)} ${computeStreak(doneSet, today) === 1 ? "dan" : "dana"}</p></div>
+    ${missedCard(doneSet, today)}
     ${parentRewards()}
     <div class="rangebar" role="group" aria-label="Razdoblje"><span class="small muted">Rezultati za:</span>${Object.entries(RANGES).map(([k, v]) => `<button class="seg" data-range="${k}" aria-pressed="${k === range}">${v}</button>`).join("")}</div>
     <div class="card"><h3>Po kategorijama</h3>${stats ? `<div class="stat-grid">${stats}</div>` : `<p class="muted">${range === "today" ? "Danas još nema riješenih zadataka." : range === "week" ? "Ovaj tjedan još nema riješenih zadataka." : "Rezultati će se pojaviti nakon prvog dana."}</p>`}
@@ -719,6 +746,12 @@ function parent() {
     <p class="foot"><a href="#dani">Svi dani, zadatak po zadatak →</a></p>`;
   app.querySelectorAll("[data-range]").forEach(b => b.onclick = () => { range = b.dataset.range; try { localStorage.setItem("sipak.range", range); } catch (_) {} parent(); });
   $("#toLara").onclick = e => { e.preventDefault(); location.hash = ""; };
+  app.querySelectorAll("[data-excuse]").forEach(b => b.onclick = async () => {
+    const k = b.dataset.excuse, had = excused.has(k);
+    had ? excused.delete(k) : excused.add(k);
+    if (!(await saveExcused())) had ? excused.add(k) : excused.delete(k);
+    parent();
+  });
   app.querySelectorAll("[data-used]").forEach(b => b.onclick = async () => {
     const r = requests.find(x => x.id === b.dataset.used); if (!r) return;
     r.usedAt = new Date().toISOString();
@@ -732,6 +765,21 @@ function parent() {
     parent();
   });
 }
+function missedDays(doneSet, today) {
+  const keys = [...doneSet].sort(); if (!keys.length) return [];
+  const out = [], tk = key(today), d = new Date(today); d.setDate(d.getDate() - 1);
+  for (let i = 0; i < 30; i++) { const k = key(d); if (k < keys[0]) break; const wd = d.getDay();
+    if (k !== tk && wd !== 0 && wd !== 6 && !doneSet.has(k)) out.push(k); d.setDate(d.getDate() - 1); }
+  return out;
+}
+function missedCard(doneSet, today) {
+  const miss = missedDays(doneSet, today); if (!miss.length) return "";
+  const sh = streakInfo(doneSet, today).shielded;
+  return `<div class="card"><h3>Propušteni dani (zadnjih 30)</h3><div class="hist">${miss.map(k => {
+    const st = sh.get(k), label = st === "opravdano" ? '<span class="pill ok">opravdano</span>' : st === "zaštita" ? '<span class="pill ok">mjesečna zaštita</span>' : '<span class="pill no">prekinuo niz</span>';
+    return `<div class="hist-row"><div class="zr-what"><b>${fmtDate(k)}</b>${label}</div><button class="btn ghost" data-excuse="${k}" style="min-height:40px;padding:6px 14px;font-size:.92rem">${excused.has(k) ? "Poništi" : "Opravdano (bolest)"}</button></div>`; }).join("")}</div>
+    <p class="small muted">Opravdan dan ne prekida niz i ne troši mjesečnu zaštitu. Lara ga vidi kao štit u tjednu.</p></div>`;
+}
 function parentRewards() {
   const bal = balance(), e = earnings(sessions);
   const pend = requests.filter(r => r.status === "pending");
@@ -744,7 +792,7 @@ function parentRewards() {
     <div class="zr-bar" role="img" aria-label="Od ${bal.earned} zarađenih zrna: ${bal.spent} potrošeno, ${bal.held} na čekanju, ${bal.free} slobodno">
       <i class="sp" style="width:${pct(bal.spent)}%"></i><i class="hd" style="width:${pct(bal.held)}%"></i><i class="fr" style="width:${pct(bal.free)}%"></i></div>
     <div class="zr-legend"><span><i class="sp"></i>Potrošeno <b>${bal.spent}</b></span><span><i class="hd"></i>Na čekanju <b>${bal.held}</b></span><span><i class="fr"></i>Slobodno <b>${bal.free}</b></span></div>
-    <div class="zr-chips"><span class="chip">Riješeni dani <b>${e.days}</b> × ${DAY_ZRNA}</span>${e.sats ? `<span class="chip">Subote <b>${e.sats}</b></span>` : ""}<span class="chip">Bonusi <b>${e.extras}</b></span><span class="chip">Puni tjedni <b>${e.weeks}</b> × 3</span></div>
+    <div class="zr-chips"><span class="chip">Riješeni dani <b>${e.days}</b> × ${DAY_ZRNA}</span>${e.sats ? `<span class="chip">Subote <b>${e.sats}</b></span>` : ""}<span class="chip">Bonusi <b>${e.extras}</b></span><span class="chip">Puni tjedni <b>${e.weeks}</b> × 3</span>${e.msZ ? `<span class="chip">Nagrade za niz <b>+${e.msZ}</b></span>` : ""}</div>
     ${owed ? `<div class="zr-owed"><span>${seedSvg("done")}</span><div><b>Duguješ ${owed} min Minecrafta</b><p class="small">Odobreno, a još nije odigrano. Označi u tablici ispod kad odigra.</p></div></div>` : ""}
   </div>
   <div class="card"><div class="zr-head"><h3>Čeka tvoje odobrenje</h3>${pend.length ? `<span class="pill no">${pend.length}</span>` : ""}</div>
@@ -905,7 +953,9 @@ function loginView(msg = "") {
 /* ---------- boot & routing ---------- */
 let reports = [], observations = [];
 async function loadAll(table) { if (!db) return []; try { const q = await db.collection(table).get(); return q.docs.map(d => ({ id: d.id, ...d.data() })); } catch (_) { return []; } }
-async function refresh() { [sessions, requests, reports, observations] = await Promise.all([loadSessions(), loadRequests(), loadAll("reports"), loadAll("observations")]); route(); }
+async function loadExcused() { if (!db) return excused; try { const d = await db.doc("settings/excused").get(); return new Set(d.exists ? d.data().dates || [] : []); } catch (_) { return excused; } }
+async function saveExcused() { if (!db) return true; try { await db.doc("settings/excused").set({ dates: [...excused].sort(), updatedAt: new Date().toISOString() }); return true; } catch (_) { return false; } }
+async function refresh() { let ex; [sessions, requests, reports, observations, ex] = await Promise.all([loadSessions(), loadRequests(), loadAll("reports"), loadAll("observations"), loadExcused()]); excused = ex; route(); }
 const PARENT_VIEWS = { "#roditelj": () => parent(), "#dani": () => daysView(), "#izvjestaji": () => reportsView(), "#opazanja": () => observationsView() };
 function route() { if (run) return; const v = PARENT_VIEWS[location.hash]; if (v) { unlocked ? v() : pinGate(); } else { unlocked = false; home(); } }
 window.addEventListener("hashchange", () => { if (!run) refresh(); });
