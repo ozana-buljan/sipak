@@ -458,10 +458,10 @@ function shell(inner, foot = true) {
 }
 function home() {
   const today = new Date();
-  const doneSet = new Set(sessions.filter(s => s.completed).map(s => s.date));
+  const doneSet = new Set(sessions.filter(s => s.completed && s.kind !== "extra").map(s => s.date));
   const streak = computeStreak(doneSet, today);
   const p = plan(today, sessions);
-  const streakCard = `<div class="card"><div class="streak"><b>${streak}</b><span>${streak === 1 ? "dan" : "dana"} zaredom</span></div>${weekStrip(doneSet, today)}<p class="small muted">Nedjelja je odmor i ne prekida niz.</p></div>`;
+  const streakCard = `<div class="card"><div class="streak"><b>${streak}</b><span>${streak === 1 ? "dan" : "dana"} zaredom</span></div>${weekStrip(doneSet, today)}<p class="small muted">Nedjelja je odmor i ne prekida niz. Niz broji dnevne zadatke, ne bonuse.</p></div>`;
   const bal = balance();
   const basketCard = `<div class="card"><div class="basket"><div><p class="label">Tvoja košarica</p><p><b>${bal.free}</b> ${zrna(bal.free)}</p></div><button class="btn" id="toRewards">Nagrade</button></div>
     <p class="small muted">Zrno dobivaš za svaki riješen dan i svaki bonus (do ${EXTRA_MAX} dnevno), a 3 zrna za cijeli tjedan. 1 zrno = 5 min Minecrafta.</p></div>`;
@@ -469,7 +469,8 @@ function home() {
   let main = "";
   if (p.mode === "done") main = `<div class="card"><h2>Za danas je gotovo!</h2><p>Bravo, Lara.</p>${ex.done >= EXTRA_MAX ? `<p class="muted">Riješila si sva ${EXTRA_MAX} bonusa. Vidimo se sutra!</p>`
     : `<p>${ex.open ? "Bonus te čeka tamo gdje si stala." : `Želiš li bonus ${ex.n} od ${EXTRA_MAX}? ${LEVELS[ex.n - 1].desc}`} Donosi još jedno zrno.</p><button class="btn" id="extra">${ex.open ? "Nastavi bonus" : `Bonus ${ex.n} od ${EXTRA_MAX}`}</button>`}</div>`;
-  else if (p.mode === "rest") main = `<div class="card"><h2>Nedjelja je za odmor</h2><p>Tvoja zrna su sigurna. Sutra nastavljamo.</p></div>`;
+  else if (p.mode === "rest") main = `<div class="card"><h2>Nedjelja je za odmor</h2><p>Danas nema zadataka. Tvoja zrna su sigurna, a niz se ne prekida.</p>${ex.done >= EXTRA_MAX ? `<p class="muted">Riješila si sva ${EXTRA_MAX} bonusa. Vidimo se sutra!</p>`
+    : `<p class="small muted">Ako želiš, možeš riješiti bonus ${ex.n} od ${EXTRA_MAX}. ${LEVELS[ex.n - 1].desc} Donosi jedno zrno.</p><button class="btn ghost" id="extra">${ex.open ? "Nastavi bonus" : `Bonus ${ex.n} od ${EXTRA_MAX}`}</button>`}</div>`;
   else if (p.mode === "baselineDone") main = `<div class="card"><h2>Prvi tjedan je gotov!</h2><p>Svih pet dana je riješeno. Nova dnevna vježba stiže uskoro.</p></div>`;
   else {
     const isBonus = p.mode === "bonus";
@@ -638,7 +639,7 @@ function doneLine(sess) {
   return `${sess.kind === "extra" ? "U ovom bonusu si prošla kroz" : "Danas si prošla kroz"} <b>${main}</b> ${z(main)}${lad ? ` i <b>${lad}</b> ${q(lad)}` : ""}.`;
 }
 function endStep() {
-  const doneSet = new Set(sessions.filter(s => s.completed).map(s => s.date));
+  const doneSet = new Set(sessions.filter(s => s.completed && s.kind !== "extra").map(s => s.date));
   const streak = computeStreak(doneSet, new Date());
   const isX = run.s.kind === "extra", ex = isX ? extrasToday() : null;
   const more = isX && ex.done < EXTRA_MAX;
@@ -685,9 +686,9 @@ function parent() {
   const t = sessions.find(s => s.date === k && s.kind !== "extra");
   const status = t?.completed ? ["var(--leaf)", "Danas je riješeno", `${t.answers.filter(a=>!a.ladderOf).length} zadataka, ${Math.round((t.activeMs||0)/60000)} min${extrasToday().done ? ` · bonusi: ${extrasToday().done} od ${EXTRA_MAX}` : ""}`]
     : t ? ["var(--warn)", "Danas je započeto, nije dovršeno", `${t.answers.filter(a=>!a.ladderOf).length} zadataka do sada`]
-    : today.getDay() === 0 ? ["var(--muted)", "Nedjelja: pauza", ""] : ["var(--seed)", "Danas još nije riješeno", ""];
+    : today.getDay() === 0 ? ["var(--muted)", "Nedjelja: pauza", extrasToday().done ? `Dobrovoljni bonusi: ${extrasToday().done} od ${EXTRA_MAX}` : ""] : ["var(--seed)", "Danas još nije riješeno", ""];
   const doneBaseline = sessions.filter(s => s.kind === "baseline" && s.completed).length;
-  const doneSet = new Set(sessions.filter(s => s.completed).map(s => s.date));
+  const doneSet = new Set(sessions.filter(s => s.completed && s.kind !== "extra").map(s => s.date));
 
   const from = rangeStart(range);
   const inRange = sessions.filter(s => s.date >= from);
