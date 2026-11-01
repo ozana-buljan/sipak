@@ -764,7 +764,7 @@ function reportsView() {
   const list = [...reports].sort((a, b) => (b.date || "").localeCompare(a.date || "") || (a.type === "weekly" ? -1 : 1));
   parentShell("#izvjestaji", list.length ? list.map((r, i) => `<details class="card rep" ${i === 0 ? "open" : ""}><summary><span class="pill ${r.type === "weekly" ? "ok" : "skip"}">${r.type === "weekly" ? "Tjedni" : "Dnevni"}</span> ${esc(r.title || "")} · ${r.date ? fmtDate(r.date) : ""}</summary>
       <div class="body">${richText(r.body)}</div><p class="small muted">Napisao Claude iz Larinih podataka. Brojke su iz baze; zaključci su procjena, ne dijagnoza.</p></details>`).join("")
-    : `<div class="card"><p class="muted">Izvještaji se pojavljuju svaku večer nakon Larine vježbe (pon–sub), a petkom i tjedni.</p></div>`);
+    : `<div class="card"><p class="muted">Tjedni izvještaj stiže nedjeljom ujutro i zatvara tjedan.</p></div>`);
 }
 function observationsView() {
   const list = [...observations].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
