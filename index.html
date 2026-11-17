@@ -298,6 +298,40 @@ function hardItems(exclude) {
   else eq = N("Z3", `x : ${f[0]} = ${f[1]}\nx = ?`, f[0] * f[1], { ladder: [C("Z3a", "Nepoznati djeljenik dobijemo ovako:", `${f[1]} · ${f[0]}`, [`${f[1]} · ${f[0]}`, `${f[1]} : ${f[0]}`], { long: true }), N("Z3b", `${f[1]} · ${f[0]}`, f[0] * f[1])] });
   return [N("Z1", `${a} · ${b}`, a * b, hint), N("Z2", `${spaced(q * d)} : ${d}`, q, hint), eq];
 }
+/* Privremena dnevna vježba (odluka 17. 11.), dok ne stigne prilagodljiva iz specifikacije.
+   12 zadataka: 5 tablica množenja + 3 dijeljenja (slabe i još neizmjerene činjenice prvo), 2 desetice/stotice, 1 novac, 1 pisani račun. */
+function factStats(list) {
+  const st = {};
+  for (const ses of list) for (const a of ses.answers || []) {
+    let m = String(a.prompt).match(/^(\d+) · (\d+)$/), k = null;
+    if (m && +m[1] <= 10 && +m[2] <= 10) k = factKey(+m[1], +m[2]);
+    else if ((m = String(a.prompt).match(/^(\d+) : (\d+)$/)) && +m[1] <= 100 && +m[1] % +m[2] === 0) k = factKey(+m[2], +m[1] / +m[2]);
+    if (!k) continue;
+    const x = (st[k] ||= { n: 0, wrong: 0, ms: [] }); x.n++; if (!a.correct) x.wrong++; else x.ms.push(a.ms);
+  }
+  return st;
+}
+function dailyItems(list) {
+  const st = factStats(list), facts = [];
+  for (let a = 3; a <= 9; a++) for (let b = a; b <= 9; b++) {
+    const x = st[factKey(a, b)], med = x && x.ms.length ? median(x.ms) : null;
+    const score = !x ? (a * b < 25 ? 0.5 : 2.5) : x.wrong / x.n * 4 + (med == null ? 1 : med > 30000 ? 2 : med > 15000 ? 1 : 0);
+    facts.push({ a, b, score: score + Math.random() * 0.8 });
+  }
+  facts.sort((p, q) => q.score - p.score);
+  const pick = facts.slice(0, 8).sort(() => Math.random() - .5), out = [];
+  pick.slice(0, 5).forEach(({ a, b }, i) => { const [x, y] = Math.random() < .5 ? [a, b] : [b, a]; out.push(N("B" + (i + 1), `${x} · ${y}`, x * y)); });
+  pick.slice(5).forEach(({ a, b }, i) => { const [x, y] = Math.random() < .5 ? [a, b] : [b, a]; out.push(N("C" + (i + 1), `${x * y} : ${x}`, y)); });
+  const used = new Set(pick.map(f => factKey(f.a, f.b))), [f1, f2] = factPool(used);
+  out.push(N("D1", `${f1[0] * 10} · ${f1[1]}`, f1[0] * f1[1] * 10, { ladder: [N("D1a", `${f1[0]} · ${f1[1]}`, f1[0] * f1[1])] }));
+  out.push(N("D2", `${spaced(f2[0] * f2[1] * 100)} : ${f2[0] * 10}`, f2[1] * 10, { ladder: [N("D2a", `${f2[0] * f2[1]} : ${f2[0]}`, f2[1])] }));
+  const paid = [20, 50, 100][rnd(0, 2)], price = paid - rnd(3, Math.min(paid - 11, 48)) ;
+  const cost = price % 10 === 0 ? price - 3 : price;
+  out.push(N("E1", `Račun je ${cost} €, platila si ${paid} €. Koliko ti se vraća? (u €)`, paid - cost, { long: true }));
+  const m = rnd(112, 489), d = rnd(3, 9);
+  out.push(N("P1", `${m} · ${d}`, m * d, { hint: "Pisani račun: riješi na papiru, upiši samo rezultat." }));
+  return out;
+}
 function extraItems(n, exclude) { return n === 1 ? bonusItems(exclude) : n === 2 ? midItems(exclude) : hardItems(exclude); }
 
 /* ---------- helpers ---------- */
@@ -481,7 +515,7 @@ function plan(today, list) {
   if (wd === 0) return { mode: "rest" };
   if (wd === 6) return { mode: "bonus", session: todays };
   if (todays && todays.kind === "baseline") return { mode: "baseline", day: todays.day, session: todays };
-  if (doneBaseline >= DAYS.length) return { mode: "baselineDone" };
+  if (doneBaseline >= DAYS.length) return { mode: "daily", session: todays && todays.kind === "daily" ? todays : undefined };
   return { mode: "baseline", day: doneBaseline + 1 };
 }
 
@@ -506,10 +540,10 @@ function home() {
     : `<p class="small muted">Ako želiš, možeš riješiti bonus ${ex.n} od ${EXTRA_MAX}. ${LEVELS[ex.n - 1].desc} Donosi jedno zrno.</p><button class="btn ghost" id="extra">${ex.open ? "Nastavi bonus" : `Bonus ${ex.n} od ${EXTRA_MAX}`}</button>`}</div>`;
   else if (p.mode === "baselineDone") main = `<div class="card"><h2>Prvi tjedan je gotov!</h2><p>Svih pet dana je riješeno. Nova dnevna vježba stiže uskoro.</p></div>`;
   else {
-    const isBonus = p.mode === "bonus";
-    const title = isBonus ? "Subotnji bonus" : `Dan ${p.day} od ${DAYS.length}`;
-    const sub = isBonus ? "Pet zadataka iz tablice množenja. Nije obavezno, ali donosi zrno." : DAYS[p.day - 1].title;
-    const n = isBonus ? 5 : DAYS[p.day - 1].items.length;
+    const isBonus = p.mode === "bonus", isDaily = p.mode === "daily";
+    const title = isBonus ? "Subotnji bonus" : isDaily ? "Dnevna vježba" : `Dan ${p.day} od ${DAYS.length}`;
+    const sub = isBonus ? "Pet zadataka iz tablice množenja. Nije obavezno, ali donosi zrno." : isDaily ? "Tablica, dijeljenje, desetice, novac i jedan pisani račun." : DAYS[p.day - 1].title;
+    const n = isBonus ? 5 : isDaily ? 12 : DAYS[p.day - 1].items.length;
     main = `<div class="card"><p class="label">${esc(title)}</p><h2>${esc(sub)}</h2><p class="muted">${n} zadataka</p>
       <ul class="rules"><li>Uzmi papir i tamnu olovku. Računaj na papiru, ovdje upiši samo rezultat.</li><li>Svaki zadatak piši u svom dijelu stranice.</li><li>Ako ne znaš, slobodno preskoči.</li></ul>
       <button class="btn" id="start">${p.session ? "Nastavi" : "Kreni"}</button></div>`;
@@ -530,11 +564,11 @@ function startExtra() { const ex = extrasToday(); if (ex.done >= EXTRA_MAX) retu
 
 function startSession(p) {
   const today = new Date(), k = key(today);
-  const kind = p.mode === "bonus" ? "bonus" : p.mode === "extra" ? "extra" : "baseline";
+  const kind = p.mode === "bonus" ? "bonus" : p.mode === "extra" ? "extra" : p.mode === "daily" ? "daily" : "baseline";
   const isB = kind !== "baseline";
   const weekAgo = new Date(today); weekAgo.setDate(weekAgo.getDate() - 6);
   const n = kind === "extra" ? (p.n || 1) : null;
-  const items = isB ? (p.session?.bonusItems || (kind === "extra" ? extraItems(n, usedFacts(sessions, k)) : bonusItems(usedFacts(sessions, key(weekAgo))))) : DAYS[p.day - 1].items;
+  const items = isB ? (p.session?.bonusItems || (kind === "extra" ? extraItems(n, usedFacts(sessions, k)) : kind === "daily" ? dailyItems(sessions) : bonusItems(usedFacts(sessions, key(weekAgo))))) : DAYS[p.day - 1].items;
   const s = p.session && !p.session.completed ? JSON.parse(JSON.stringify(p.session)) : {
     id: kind === "extra" ? k + "-bonus" + (n > 1 ? n : "") : k, date: k, kind, day: kind === "baseline" ? p.day : null, startedAt: new Date().toISOString(),
     completed: false, answers: [], photos: [], mood: null, activeMs: 0,
@@ -837,7 +871,7 @@ function parentHistory() {
 function dayCard(s, open) {
   const main = s.answers.filter(a => !a.ladderOf), ok = main.filter(a => a.correct).length, sk = main.filter(a => a.skipped).length;
   const mood = { 1: "😟 teško", 2: "😐 onako", 3: "😊 dobro" }[s.mood];
-  const kind = s.kind === "bonus" ? "Subotnji bonus" : s.kind === "extra" ? `Bonus ${s.extraN || 1} · ${LEVELS[(s.extraN || 1) - 1].name}` : `Baseline dan ${s.day}`;
+  const kind = s.kind === "bonus" ? "Subotnji bonus" : s.kind === "extra" ? `Bonus ${s.extraN || 1} · ${LEVELS[(s.extraN || 1) - 1].name}` : s.kind === "daily" ? "Dnevna vježba" : `Baseline dan ${s.day}`;
   const pauseMs = (s.pauses || []).reduce((a, x) => a + x.ms, 0);
   const groups = {};
   for (const a of main) { const c = a.id.match(/^[A-Z]/)[0]; (groups[c] ||= []).push(a); }
