@@ -545,7 +545,7 @@ function home() {
     const sub = isBonus ? "Pet zadataka iz tablice množenja. Nije obavezno, ali donosi zrno." : isDaily ? "Tablica, dijeljenje, desetice, novac i jedan pisani račun." : DAYS[p.day - 1].title;
     const n = isBonus ? 5 : isDaily ? 12 : DAYS[p.day - 1].items.length;
     main = `<div class="card"><p class="label">${esc(title)}</p><h2>${esc(sub)}</h2><p class="muted">${n} zadataka</p>
-      <ul class="rules"><li>Uzmi papir i tamnu olovku. Računaj na papiru, ovdje upiši samo rezultat.</li><li>Svaki zadatak piši u svom dijelu stranice.</li><li>Ako ne znaš, slobodno preskoči.</li></ul>
+      <ul class="rules"><li>Uzmi papir i tamnu olovku. Računaj na papiru, ovdje upiši samo rezultat.</li><li>Svaki zadatak piši u svom dijelu stranice.</li><li>Ako zapneš, upiši rezultat koji misliš da je točan. Ako je krivo, dobit ćeš kratko pitanje koje pomaže.</li></ul>
       <button class="btn" id="start">${p.session ? "Nastavi" : "Kreni"}</button></div>`;
   }
   shell(`<div><h1>Bok, Lara!</h1></div>${main}${streakCard}${basketCard}`);
@@ -616,8 +616,7 @@ function nextStep() {
   shell(`<div class="progress" aria-hidden="true"><i style="width:${pct}%"></i></div>
     <div class="card"><div class="taskhead">${isLadder ? `<span class="ladder-tag">Kratko pitanje</span>` : `<p class="label">Zadatak ${run.mainDone + 1} od ${run.total}</p>`}<button class="pausebtn" id="pauseBtn">Pauza</button></div>
       <div class="prompt${it.long ? " long" : ""}">${promptHtml}</div>${it.hint ? `<p class="hint">${esc(it.hint)}</p>` : ""}
-      ${body}
-      <button class="btn ghost" id="skip">Ne znam / preskoči</button></div>`, false);
+      ${body}</div>`, false);
   const shown = performance.now(), pauseAtShow = run.pauseTotal;
   run.inTask = true;
   $("#pauseBtn").onclick = () => pause(false);
@@ -630,7 +629,6 @@ function nextStep() {
     inp.onkeydown = e => { if (e.key === "Enter" && inp.value.trim()) finish(inp.value.trim(), false); };
     go.onclick = () => finish(inp.value.trim(), false);
   }
-  $("#skip").onclick = () => finish(null, true);
 }
 
 function record(it, given, skipped, ms) {
