@@ -384,40 +384,25 @@ function extraItems(n, exclude) { return n === 1 ? bonusItems(exclude) : n === 2
    1. greška → savjet + još jedan pokušaj; 2. greška → vodič korak po korak (naprijed/natrag), pa dalje.
    Oslonci su samo · 10 i · 5, jer su to koraci u koje je Lara sigurna. */
 const sp = n => spaced(n);
+/* Jednostavni zadaci (jedna računska operacija, odluka 18. 11.): tablicu treba znati napamet.
+   Savjet nakon prve greške povezuje s poznatom činjenicom; nakon druge greške jedan zaslon s rješenjem i vezom. */
 function factGuide(x, y) {
-  let a = Math.min(x, y), b = Math.max(x, y); // b = faktor koji rastavljamo
-  for (const pref of [10, 5, 9]) if (x === pref || y === pref) { b = pref; a = x === pref ? y : x; break; }
-  const p = a * b;
-  if (b === 10) return null;
-  if (b === 5) return { tip: `Sjeti se ${a} · 10, pa uzmi pola.`, steps: [
-    { say: `Kreni od onoga što znaš: ${a} · 10.`, work: [`${a} · 10 = ${a * 10}`] },
-    { say: `${a} · 5 je pola od toga.`, work: [`${a} · 10 = ${a * 10}`, `${a * 10} : 2 = ${p}`] } ] };
-  if (b === 9) return { tip: `Kreni od ${a} · 10, pa oduzmi jedan ${a}.`, steps: [
-    { say: `Kreni od onoga što znaš: ${a} · 10.`, work: [`${a} · 10 = ${a * 10}`] },
-    { say: `${a} · 9 je jedan ${a} manje.`, work: [`${a} · 10 = ${a * 10}`, `${a * 10} − ${a} = ${p}`] } ] };
-  if (b >= 6) { const r = b - 5; return { tip: `Kreni od ${a} · 5, pa dodaj još ${a} · ${r}.`, steps: [
-    { say: `${a} · ${b} rastavi na ${a} · 5 i ${a} · ${r}.`, work: [`${a} · ${b} = ${a} · 5 + ${a} · ${r}`] },
-    { say: `${a} · 5 znaš: to je pola od ${a} · 10.`, work: [`${a} · ${b} = ${a} · 5 + ${a} · ${r}`, `${a} · 5 = ${a * 5}`] },
-    { say: `Sad ${a} · ${r}.`, work: [`${a} · ${b} = ${a} · 5 + ${a} · ${r}`, `${a} · 5 = ${a * 5}`, `${a} · ${r} = ${a * r}`] },
-    { say: `Zbroji ta dva broja.`, work: [`${a} · 5 = ${a * 5}`, `${a} · ${r} = ${a * r}`, `${a * 5} + ${a * r} = ${p}`] } ] }; }
-  const adds = Array.from({ length: b }, () => a).join(" + ");
-  return { tip: `${a} · ${b} znači ${b} puta po ${a}.`, steps: [
-    { say: `${a} · ${b} znači ${b} puta po ${a}.`, work: [`${a} · ${b} = ${adds}`] },
-    { say: `Zbroji.`, work: [`${adds} = ${p}`] } ] };
+  const p = x * y; if (x === 10 || y === 10 || x < 2 || y < 2) return null;
+  const evens = [x, y].filter(v => v % 2 === 0 && v >= 4).sort((m, n) => n - m);
+  let tip, work, say;
+  if (x === 5 || y === 5) { const a = x === 5 ? y : x;
+    tip = `${a} · 5 je pola od ${a} · 10.`; work = [`${a} · 10 = ${a * 10}`, `${a * 10} : 2 = ${p}`]; say = `${a} · 5 = ${p}. To je pola od ${a} · 10 = ${a * 10}.`; }
+  else if (evens.length) { const e = evens[0], a = e === x ? y : x, h = a * e / 2;
+    tip = `${a} · ${e} je dvaput ${a} · ${e / 2}.`; work = [`${a} · ${e / 2} = ${h}`, `${h} + ${h} = ${p}`]; say = `${a} · ${e} = ${p}. To je dvaput ${a} · ${e / 2} = ${h}.`; }
+  else { const b = Math.max(x, y), a = Math.min(x, y), q = a * (b - 1);
+    tip = `${a} · ${b} je ${a} · ${b - 1} i još jedan ${a}.`; work = [`${a} · ${b - 1} = ${q}`, `${q} + ${a} = ${p}`]; say = `${a} · ${b} = ${p}. To je ${a} · ${b - 1} = ${q} i još jedan ${a}.`; }
+  return { tip, steps: [{ say, work: [...work, `${x} · ${y} = ${p}`] }] };
 }
 function divFactGuide(c, a) {
-  const q = c / a, f = a * 5;
-  const steps = [{ say: `Dijeljenje je obrnuto množenje. Pitamo se: ${a} · koliko = ${c}?`, work: [`${a} · ? = ${c}`] },
-    { say: `Kreni od ${a} · 5.`, work: [`${a} · ? = ${c}`, `${a} · 5 = ${f}`] }];
-  if (q > 5) { const k = q - 5; steps.push(
-    { say: `${c} je više od ${f}. Fali još ${c - f}, a to je ${k} puta po ${a}.`, work: [`${a} · 5 = ${f}`, `${c} − ${f} = ${c - f}`, `${c - f} = ${a} · ${k}`] },
-    { say: `Zajedno: 5 + ${k} = ${q}.`, work: [`${a} · ${q} = ${c}`, `${c} : ${a} = ${q}`] }); }
-  else if (q < 5) { const k = 5 - q; steps.push(
-    { say: `${c} je manje od ${f}. Previše je za ${f - c}, a to je ${k} puta po ${a}.`, work: [`${a} · 5 = ${f}`, `${f} − ${c} = ${f - c}`, `${f - c} = ${a} · ${k}`] },
-    { say: `Zato: 5 − ${k} = ${q}.`, work: [`${a} · ${q} = ${c}`, `${c} : ${a} = ${q}`] }); }
-  else steps.push({ say: `Pogodila si oslonac!`, work: [`${c} : ${a} = 5`] });
-  return { tip: `Pitaj se: ${a} · koliko = ${c}? Kreni od ${a} · 5.`, steps };
+  const q = c / a;
+  return { tip: `Pitaj se: ${a} · koliko = ${c}?`, steps: [{ say: `${c} : ${a} = ${q}, jer je ${a} · ${q} = ${c}.`, work: [`${a} · ${q} = ${c}`, `${c} : ${a} = ${q}`] }] };
 }
+const oneStep = g => !g || g.steps.length <= 1 ? g : { tip: g.tip, steps: [{ say: g.steps.map(x => x.say).join(" "), work: [...new Set(g.steps.flatMap(x => x.work))] }] };
 /* Pisani računi po udžbeniku (Moj sretni broj 4, str. 90 i 120): „Govorimo i pišemo”.
    Množenje: od jedinica, „… pišemo, … pribrajamo”; dvoznamenkasti faktor: prvo znamenka desetica, drugi umnožak jedno mjesto udesno.
    Dijeljenje: za svaku znamenku procjena („približno”), izvedena iz oslonca · 5 i koracima po jedan. */
@@ -600,7 +585,8 @@ function divGuide(N, d) {
   }
   return { tip: `Za svaku znamenku pitaj se koliko puta ${d} stane. Sjeti se tablice množenja sa ${d}.`, steps: B.steps };
 }
-function guideFor(it) {
+function guideFor(it) { const g = guideFor0(it); return g && g.steps.some(x => x.board) ? g : oneStep(g); }
+function guideFor0(it) {
   if (it.guide) return it.guide;
   const t = String(it.prompt).replace(/ /g, " ");
   let m;
