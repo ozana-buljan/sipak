@@ -81,6 +81,18 @@ a { color: var(--garnet); }
 .answer:focus { border-color: var(--seed); outline: none; }
 .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .choice { appearance: none; border: 2px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 14px; padding: 16px 10px; font: 700 1.25rem var(--f-body); cursor: pointer; min-height: 60px; }
+.feedback { text-align: center; font-family: var(--f-display); font-weight: 800; font-size: 1.6rem; padding: 28px 0; }
+.feedback.ok { color: var(--leaf); }
+.tryagain { background: var(--warn-soft); color: var(--ink); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.tryagain b { color: var(--warn); }
+.guide-work { font: 700 1.12rem/1.5 ui-monospace, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; white-space: pre; text-align: right; align-self: center; padding: 12px 18px; border-radius: 14px; background: var(--paper); border: 1px solid var(--line); overflow-x: auto; max-width: 100%; }
+.guide-work .new { color: var(--garnet); }
+.guide-work .rule { display: block; border-top: 2px solid var(--ink); }
+.guide-say { font-size: 1.1rem; }
+.guide-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.guide-dots { display: flex; gap: 6px; justify-content: center; }
+.guide-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.guide-dots i.on { background: var(--garnet); }
 .saved { text-align: center; font-family: var(--f-display); font-weight: 800; font-size: 1.6rem; color: var(--leaf); padding: 28px 0; }
 .ladder-tag { display: inline-block; align-self: flex-start; background: var(--leaf-soft); color: var(--leaf); border-radius: 99px; padding: 3px 10px; font-size: .82rem; font-weight: 700; }
 .moods { display: flex; gap: 12px; justify-content: center; }
@@ -333,6 +345,123 @@ function dailyItems(list) {
   return out;
 }
 function extraItems(n, exclude) { return n === 1 ? bonusItems(exclude) : n === 2 ? midItems(exclude) : hardItems(exclude); }
+
+/* ---------- savjet i vodič nakon greške (odluka 18. 11.) ----------
+   1. greška → savjet + još jedan pokušaj; 2. greška → vodič korak po korak (naprijed/natrag), pa dalje.
+   Oslonci su samo · 10 i · 5, jer su to koraci u koje je Lara sigurna. */
+const sp = n => spaced(n);
+function factGuide(x, y) {
+  let a = Math.min(x, y), b = Math.max(x, y); // b = faktor koji rastavljamo
+  for (const pref of [10, 5, 9]) if (x === pref || y === pref) { b = pref; a = x === pref ? y : x; break; }
+  const p = a * b;
+  if (b === 10) return null;
+  if (b === 5) return { tip: `Sjeti se ${a} · 10, pa uzmi pola.`, steps: [
+    { say: `Kreni od onoga što znaš: ${a} · 10.`, work: [`${a} · 10 = ${a * 10}`] },
+    { say: `${a} · 5 je pola od toga.`, work: [`${a} · 10 = ${a * 10}`, `${a * 10} : 2 = ${p}`] } ] };
+  if (b === 9) return { tip: `Kreni od ${a} · 10, pa oduzmi jedan ${a}.`, steps: [
+    { say: `Kreni od onoga što znaš: ${a} · 10.`, work: [`${a} · 10 = ${a * 10}`] },
+    { say: `${a} · 9 je jedan ${a} manje.`, work: [`${a} · 10 = ${a * 10}`, `${a * 10} − ${a} = ${p}`] } ] };
+  if (b >= 6) { const r = b - 5; return { tip: `Kreni od ${a} · 5, pa dodaj još ${a} · ${r}.`, steps: [
+    { say: `${a} · ${b} rastavi na ${a} · 5 i ${a} · ${r}.`, work: [`${a} · ${b} = ${a} · 5 + ${a} · ${r}`] },
+    { say: `${a} · 5 znaš: to je pola od ${a} · 10.`, work: [`${a} · ${b} = ${a} · 5 + ${a} · ${r}`, `${a} · 5 = ${a * 5}`] },
+    { say: `Sad ${a} · ${r}.`, work: [`${a} · ${b} = ${a} · 5 + ${a} · ${r}`, `${a} · 5 = ${a * 5}`, `${a} · ${r} = ${a * r}`] },
+    { say: `Zbroji ta dva broja.`, work: [`${a} · 5 = ${a * 5}`, `${a} · ${r} = ${a * r}`, `${a * 5} + ${a * r} = ${p}`] } ] }; }
+  const adds = Array.from({ length: b }, () => a).join(" + ");
+  return { tip: `${a} · ${b} znači ${b} puta po ${a}.`, steps: [
+    { say: `${a} · ${b} znači ${b} puta po ${a}.`, work: [`${a} · ${b} = ${adds}`] },
+    { say: `Zbroji.`, work: [`${adds} = ${p}`] } ] };
+}
+function divFactGuide(c, a) {
+  const q = c / a, f = a * 5;
+  const steps = [{ say: `Dijeljenje je obrnuto množenje. Pitamo se: ${a} · koliko = ${c}?`, work: [`${a} · ? = ${c}`] },
+    { say: `Kreni od ${a} · 5.`, work: [`${a} · ? = ${c}`, `${a} · 5 = ${f}`] }];
+  if (q > 5) { const k = q - 5; steps.push(
+    { say: `${c} je više od ${f}. Fali još ${c - f}, a to je ${k} puta po ${a}.`, work: [`${a} · 5 = ${f}`, `${c} − ${f} = ${c - f}`, `${c - f} = ${a} · ${k}`] },
+    { say: `Zajedno: 5 + ${k} = ${q}.`, work: [`${a} · ${q} = ${c}`, `${c} : ${a} = ${q}`] }); }
+  else if (q < 5) { const k = 5 - q; steps.push(
+    { say: `${c} je manje od ${f}. Previše je za ${f - c}, a to je ${k} puta po ${a}.`, work: [`${a} · 5 = ${f}`, `${f} − ${c} = ${f - c}`, `${f - c} = ${a} · ${k}`] },
+    { say: `Zato: 5 − ${k} = ${q}.`, work: [`${a} · ${q} = ${c}`, `${c} : ${a} = ${q}`] }); }
+  else steps.push({ say: `Pogodila si oslonac!`, work: [`${c} : ${a} = 5`] });
+  return { tip: `Pitaj se: ${a} · koliko = ${c}? Kreni od ${a} · 5.`, steps };
+}
+/* Pisani računi po udžbeniku (Moj sretni broj 4, str. 90 i 120): „Govorimo i pišemo”.
+   Množenje: od jedinica, „… pišemo, … pribrajamo”; dvoznamenkasti faktor: prvo znamenka desetica, drugi umnožak jedno mjesto udesno.
+   Dijeljenje: za svaku znamenku procjena („približno”), izvedena iz oslonca · 5 i koracima po jedan. */
+const padTo = (str, endCol) => " ".repeat(Math.max(0, endCol + 1 - str.length)) + str;
+function mulGuide(m, d) {
+  const head = `${m} · ${d}`, E = head.length - 1, prod = m * d, dig = String(m).split("").map(Number).reverse();
+  const steps = []; let carry = 0;
+  dig.forEach((x, i) => {
+    const raw = x * d, tot = raw + carry, last = i === dig.length - 1;
+    const shown = String(prod).slice(-(i + 1));
+    const written = last ? String(prod) : shown;
+    const say = `${d} · ${x} = ${raw}` + (carry ? ` i ${carry} je ${tot}` : "") + (last ? "." : `, ${tot % 10} pišemo, ${Math.floor(tot / 10)} pribrajamo.`);
+    steps.push({ say, align: "left", work: [head, padTo(written, E)] });
+    carry = Math.floor(tot / 10);
+  });
+  return { tip: `Riješi ponovno na papiru, znamenku po znamenku, i pazi što pribrajaš.`, steps };
+}
+function mul2Guide(a, b) {
+  const head = `${a} · ${b}`, E = head.length - 1, t = Math.floor(b / 10), u = b % 10, p1 = a * t, p2 = a * u;
+  return { tip: `Množi prvo znamenkom desetica (${t}), pa jedinica (${u}). Drugi umnožak piši jedno mjesto udesno.`, steps: [
+    { say: `Počinjemo znamenkom najveće mjesne vrijednosti: ${a} · ${t} = ${p1}.`, align: "left", work: [head, padTo(String(p1), E - 1)] },
+    { say: `Sad ${a} · ${u} = ${p2}. Pišemo ga jedno mjesto udesno.`, align: "left", work: [head, padTo(String(p1), E - 1), padTo("+" + p2, E)] },
+    { say: `Zbroji djelomične umnoške.`, align: "left", work: [head, padTo(String(p1), E - 1), padTo("+" + p2, E), padTo(String(a * b), E)] } ] };
+}
+function divGuide(N, d) {
+  const ds = String(N), q = Math.floor(N / d);
+  let pos = 0, cur = +ds[0];
+  while (cur < d && pos < ds.length - 1) cur = cur * 10 + +ds[++pos];
+  const lines = [], steps = []; let qs = "";
+  const head = () => `${ds} : ${d} = ${qs}`;
+  for (;;) {
+    const qd = Math.floor(cur / d); let chain, say;
+    if (cur < d) { chain = []; say = `${cur} je manje od ${d}, pa je ${cur} : ${d} = 0.`; }
+    else if (qd <= 2) {
+      chain = []; for (let k = 1; k <= 3; k++) { const v = d * k; chain.push(`${d} · ${k} = ${v}${v > cur ? "  previše" : ""}`); if (v > cur) break; }
+      say = `${cur} : ${d} = približno koliko? Broj je malen, kreni od ${d} · 1 i idi gore dok ne bude previše. Zato je približno ${qd}.`;
+    } else if (d * 5 <= cur) {
+      chain = [`${d} · 5 = ${d * 5}`]; for (let k = 6; k <= 10; k++) { const v = d * k; chain.push(`${d} · ${k} = ${d * (k - 1)} + ${d} = ${v}${v > cur ? "  previše" : ""}`); if (v > cur) break; }
+      say = `${cur} : ${d} = približno koliko? Kreni od ${d} · 5 = ${d * 5}. To još nije previše, pa dodaj po jedan ${d} dok ne bude previše. Zato je približno ${qd}.`;
+    } else {
+      chain = [`${d} · 5 = ${d * 5}  previše`]; for (let k = 4; k >= 0; k--) { const v = d * k; chain.push(`${d} · ${k} = ${d * (k + 1)} − ${d} = ${v}${v > cur ? "  previše" : ""}`); if (v <= cur) break; }
+      say = `${cur} : ${d} = približno koliko? Kreni od ${d} · 5 = ${d * 5}. To je previše, pa oduzimaj po jedan ${d} dok ne stane. Zato je približno ${qd}.`;
+    }
+    steps.push({ say, align: "left", work: [head(), ...lines, ...(chain.length ? ["", ...chain] : [])] });
+    qs += qd; const pr = qd * d, before = cur, rem = cur - pr;
+    lines.push(padTo("-" + pr, pos));
+    const more = pos < ds.length - 1;
+    if (more) { cur = rem * 10 + +ds[pos + 1]; pos++; lines.push(padTo(String(cur), pos)); }
+    else lines.push(padTo(String(rem), pos));
+    steps.push({ say: `${qd} · ${d} = ${pr}. ${before} − ${pr} = ${rem}.` + (more ? ` Ostatku pripisujemo ${ds[pos]}.` : " Gotovo!"), align: "left", work: [head(), ...lines] });
+    if (!more) break;
+  }
+  return { tip: `Za svaku znamenku procijeni koliko puta stane ${d}: kreni od ${d} · 5.`, steps };
+}
+function guideFor(it) {
+  if (it.guide) return it.guide;
+  const t = String(it.prompt).replace(/ /g, " ");
+  let m;
+  if ((m = t.match(/^(\d{3,}) · (\d)$/))) return mulGuide(+m[1], +m[2]);
+  if ((m = t.match(/^(\d\d) · (\d\d)$/))) return mul2Guide(+m[1], +m[2]);
+  if ((m = t.match(/^([\d ]+) : (\d)$/)) && +m[1].replace(/ /g, "") > 100) return divGuide(+m[1].replace(/ /g, ""), +m[2]);
+  if ((m = t.match(/^(\d+) · (\d+)$/)) && +m[1] <= 10 && +m[2] <= 10) return factGuide(+m[1], +m[2]);
+  if ((m = t.match(/^(\d+) : (\d+)$/)) && +m[1] <= 100 && +m[1] % +m[2] === 0) return divFactGuide(+m[1], +m[2]);
+  if ((m = t.match(/^(\d)0 · (\d)$/))) { const a = +m[1], b = +m[2]; return { tip: `Izračunaj ${a} · ${b}, pa dopiši nulu.`, steps: [
+    { say: `Zanemari nulu i izračunaj ${a} · ${b}.`, work: [`${a} · ${b} = ${a * b}`] },
+    { say: `Sad vrati nulu na kraj.`, work: [`${a} · ${b} = ${a * b}`, `${a}0 · ${b} = ${a * b}0`] } ] }; }
+  if ((m = t.replace(/ /g, "").match(/^(\d+)00:(\d)0$/))) { const c = +m[1], a = +m[2], q = c / a; if (Number.isInteger(q)) return { tip: `Makni po jednu nulu s oba broja.`, steps: [
+    { say: `Makni po jednu nulu s oba broja. Rezultat ostaje isti.`, work: [`${sp(c * 100)} : ${a}0`, `= ${sp(c * 10)} : ${a}`] },
+    { say: `Izračunaj bez nule: ${c} : ${a}.`, work: [`${c} : ${a} = ${q}`] },
+    { say: `Vrati nulu.`, work: [`${c} : ${a} = ${q}`, `${sp(c * 10)} : ${a} = ${q * 10}`] } ] }; }
+  if ((m = t.match(/^Račun je (\d+) €, platila si (\d+) €/))) { const x = +m[1], y = +m[2], up = Math.ceil(x / 10) * 10; const s1 = up - x, s2 = y - up;
+    return { tip: `Nadopuni od ${x} do ${y}: prvo do sljedeće desetice.`, steps: [
+      { say: `Vraća se onoliko koliko fali od ${x} do ${y}. Prvo do sljedeće desetice.`, work: [`${x} + ${s1} = ${up}`] },
+      { say: `Sad od ${up} do ${y}.`, work: [`${x} + ${s1} = ${up}`, `${up} + ${s2} = ${y}`] },
+      { say: `Zbroji što si dodala.`, work: [`${s1} + ${s2} = ${s1 + s2}`] } ] }; }
+  if (it.ladder) return { tip: "Pogledaj zadatak još jednom, korak po korak.", steps: it.ladder.map((l, i) => ({ say: l.prompt.replace(/\n/g, " "), work: it.ladder.slice(0, i + 1).map(x => `${x.prompt.split("\n").pop()} → ${x.answer}`) })) };
+  return null;
+}
 
 /* ---------- helpers ---------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -607,7 +736,7 @@ function nextStep() {
   if (!run.queue.length) { run.cut = false; if (run.s.kind === "extra") return finishExtra(); return photoStep(); }
   const it = run.queue[0];
   const pct = Math.round((run.mainDone / run.total) * 100);
-  const isLadder = !!it.ladderOf;
+  const isLadder = !!it.ladderOf && !it.retry;
   const promptHtml = esc(it.prompt).replace(/\n/g, "<br>");
   const body = it.type === "choice"
     ? `<div class="choices">${it.options.map((o, i) => `<button class="choice" id="ch${i}" data-v="${esc(o)}">${esc(o)}</button>`).join("")}</div>`
@@ -615,6 +744,7 @@ function nextStep() {
        <button class="btn" id="go" disabled>Dalje</button>`;
   shell(`<div class="progress" aria-hidden="true"><i style="width:${pct}%"></i></div>
     <div class="card"><div class="taskhead">${isLadder ? `<span class="ladder-tag">Kratko pitanje</span>` : `<p class="label">Zadatak ${run.mainDone + 1} od ${run.total}</p>`}<button class="pausebtn" id="pauseBtn">Pauza</button></div>
+      ${it.retry ? `<div class="tryagain" role="status"><b>Nije još točno. Pokušaj ponovno.</b>${it.tip ? `<span>${esc(it.tip)}</span>` : ""}</div>` : ""}
       <div class="prompt${it.long ? " long" : ""}">${promptHtml}</div>${it.hint ? `<p class="hint">${esc(it.hint)}</p>` : ""}
       ${body}</div>`, false);
   const shown = performance.now(), pauseAtShow = run.pauseTotal;
@@ -634,15 +764,41 @@ function nextStep() {
 function record(it, given, skipped, ms) {
   run.queue.shift();
   const correct = !skipped && norm(given) === norm(it.answer);
-  run.s.answers.push({ id: it.id, prompt: it.prompt, answer: it.answer, given, correct, skipped, ms, ladderOf: it.ladderOf || null, at: new Date().toISOString() });
-  if (!it.ladderOf) {
+  const coached = run.s.kind !== "baseline";
+  run.s.answers.push({ id: it.id, prompt: it.prompt, answer: it.answer, given, correct, skipped, ms, ladderOf: it.ladderOf || null, retry: it.retry || undefined, at: new Date().toISOString() });
+  if (coached && !it.ladderOf) {
+    const g = guideFor(it);
+    if (correct) { run.mainDone++; }
+    else if (it.type !== "choice" && g) { // prvi krivi pokušaj → savjet i još jedan pokušaj
+      run.queue.unshift({ ...it, ladderOf: it.id, retry: 1, tip: g.tip, guide: g, ladder: undefined });
+    } else { run.mainDone++; if (g) return showGuide(it, g); }
+  } else if (coached && it.retry) {
+    run.mainDone++;
+    if (!correct) { run.s.activeMs = Math.round(elapsed()); saveSession(run.s); return showGuide(it, it.guide); }
+  } else if (!it.ladderOf) {
     run.mainDone++;
     if (!correct && it.ladder) run.queue.unshift(...it.ladder.map(l => ({ ...l, ladderOf: it.id })));
   }
   run.s.activeMs = Math.round(elapsed());
   saveSession(run.s);
-  shell(`<div class="card"><p class="saved">Spremljeno!</p></div>`, false);
-  setTimeout(nextStep, 550);
+  const msg = !coached ? "Spremljeno!" : correct ? (it.retry ? "Točno! Bravo što si pokušala ponovno." : "Točno!") : "Spremljeno!";
+  shell(`<div class="card"><p class="feedback${coached && correct ? " ok" : ""} saved">${msg}</p></div>`, false);
+  setTimeout(nextStep, coached && correct && it.retry ? 1100 : 600);
+}
+function showGuide(it, g, i = 0) {
+  run.inTask = false;
+  (run.s.guides ||= []); if (i === 0) { run.s.guides.push({ id: it.id, at: new Date().toISOString() }); saveSession(run.s); }
+  const st = g.steps[i], last = i === g.steps.length - 1;
+  const work = st.work.map((l, j) => `<span class="${j === st.work.length - 1 ? "new" : ""}">${esc(l)}</span>`).join("\n");
+  shell(`<div class="card"><div class="taskhead"><span class="ladder-tag">Riješimo zajedno</span><span class="small muted">Korak ${i + 1} od ${g.steps.length}</span></div>
+    <p class="label">${esc(String(it.prompt).replace(/\n/g, " "))}</p>
+    <div class="guide-work"${st.align === "left" ? ' style="text-align:left"' : ""}>${work}</div>
+    <p class="guide-say">${esc(st.say)}</p>
+    ${last ? `<p><b>Rješenje: ${esc(it.answer)}</b></p>` : ""}
+    <div class="guide-dots" aria-hidden="true">${g.steps.map((_, j) => `<i class="${j <= i ? "on" : ""}"></i>`).join("")}</div>
+    <div class="guide-nav"><button class="btn ghost" id="gBack" ${i === 0 ? "disabled" : ""}>Natrag</button><button class="btn" id="gNext">${last ? "Nastavi" : "Dalje"}</button></div></div>`, false);
+  $("#gBack").onclick = () => showGuide(it, g, i - 1);
+  $("#gNext").onclick = () => last ? nextStep() : showGuide(it, g, i + 1);
 }
 
 async function finishExtra() {
@@ -698,7 +854,7 @@ function moodStep() {
   });
 }
 function doneLine(sess) {
-  const main = sess.answers.filter(x => !x.ladderOf).length, lad = sess.answers.filter(x => x.ladderOf).length;
+  const main = sess.answers.filter(x => !x.ladderOf).length, lad = sess.answers.filter(x => x.ladderOf && !x.retry).length;
   const z = n => n === 1 ? "zadatak" : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? "zadatka" : "zadataka";
   const q = n => n === 1 ? "kratko pitanje" : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? "kratka pitanja" : "kratkih pitanja";
   return `${sess.kind === "extra" ? "U ovom bonusu si prošla kroz" : "Danas si prošla kroz"} <b>${main}</b> ${z(main)}${lad ? ` i <b>${lad}</b> ${q(lad)}` : ""}.`;
