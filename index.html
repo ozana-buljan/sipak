@@ -572,9 +572,13 @@ function divGuide(N, d) {
   let row = 0, curStart = 0;
   for (;;) {
     const qd = Math.floor(cur / d); let pick = null, pickLine = "";
-    B.focus(row, curStart, pos); B.side(`${cur} : ${d} ≈ ?`, "ttl"); B.snap(`Koliko puta ${d} stane u ${cur}? Procijenimo.`);
+    B.focus(row, curStart, pos); B.side(`${cur} : ${d} ≈ ?`, "ttl"); B.snap(cur <= 100 ? `Koliko puta ${d} stane u ${cur}? Sjeti se tablice množenja sa ${d}.` : `Koliko puta ${d} stane u ${cur}? Procijenimo.`);
     const tryLine = (k, txt, say) => { const v = d * k, over = v > cur; const n = B.side(txt + (over ? "  previše" : ""), over ? "no" : ""); if (k === qd) { pick = n; pickLine = txt; } B.focus(row, curStart, pos); B.snap(say(v, over)); return over; };
     if (cur < d) { const t = `${cur} < ${d}, znači 0`; pick = B.side(t); pickLine = t; B.focus(row, curStart, pos); B.snap(`${cur} je manje od ${d}, pa ${d} stane 0 puta.`); }
+    else if (cur <= 100) { // tablica množenja: znati napamet, bez oslonca na 5 ili 10 (odluka 18. 11.)
+      const t1 = `${d} · ${qd} = ${d * qd}`; pick = B.side(t1); pickLine = t1; B.focus(row, curStart, pos);
+      if (d * qd === cur) B.snap(`Iz tablice množenja: ${d} · ${qd} = ${cur}. Znači ${qd}.`);
+      else { B.side(`${d} · ${qd + 1} = ${d * (qd + 1)}  previše`, "no"); B.snap(`Iz tablice množenja: ${d} · ${qd} = ${d * qd}, a ${d} · ${qd + 1} = ${d * (qd + 1)} je previše. Znači ${qd}.`); } }
     else if (qd <= 2) { for (let k = 1; k <= 3; k++) if (tryLine(k, `${d} · ${k} = ${d * k}`, (v, o) => o ? `${v} je više od ${cur}. Previše! Znači ${qd}.` : `${d} · ${k} = ${v}. Još stane.`)) break; }
     else if (d * 5 <= cur) { if (!tryLine(5, `${d} · 5 = ${d * 5}`, v => `Kreni od ${d} · 5 = ${v}. To još stane u ${cur}.`))
       for (let k = 6; k <= 10; k++) if (tryLine(k, `${d} · ${k} = ${d * (k - 1)} + ${d} = ${d * k}`, (v, o) => o ? `${d} · ${k} = ${v}. Previše! Znači ${qd}.` : `Dodaj još jedan ${d}: ${d} · ${k} = ${v}. Još stane.`)) break; }
@@ -594,7 +598,7 @@ function divGuide(N, d) {
     pos++; B.put(row + 2, pos, ds[pos]); B.arrow(pos, 0, row + 2); B.snap(`Spuštamo sljedeću znamenku, ${ds[pos]}, pored ostatka. Sad imamo ${rem * 10 + +ds[pos]}.`);
     cur = rem * 10 + +ds[pos]; row += 2; curStart = pos - String(cur).length + 1;
   }
-  return { tip: `Za svaku znamenku procijeni koliko puta stane ${d}: kreni od ${d} · 5.`, steps: B.steps };
+  return { tip: `Za svaku znamenku pitaj se koliko puta ${d} stane. Sjeti se tablice množenja sa ${d}.`, steps: B.steps };
 }
 function guideFor(it) {
   if (it.guide) return it.guide;
