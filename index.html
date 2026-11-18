@@ -286,7 +286,7 @@ const DAYS = [
 ];
 const CAT = { A:"Zbrajanje i oduzimanje do 20", B:"Tablica množenja", C:"Tablica dijeljenja", D:"Mjesne vrijednosti, ·/: s 10 i 100",
   P:"Pisani računi", E:"Mjerne jedinice i novac", F:"Skupovi", G:"Algebarski izrazi", H:"Kvadrati", I:"Jednadžbe", J:"Nejednadžbe",
-  X:"Bonus · tablica", Y:"Bonus · dijeljenje i desetice", Z:"Bonus · pisani računi i jednadžba" };
+  K:"Prirodni brojevi (trenutno)", X:"Bonus · tablica", Y:"Bonus · dijeljenje i desetice", Z:"Bonus · pisani računi i jednadžba" };
 const zrna = n => (n % 10 === 1 && n % 100 !== 11) ? "zrno" : "zrna";
 
 function factKey(x, y) { return Math.min(x, y) + "x" + Math.max(x, y); }
@@ -360,6 +360,7 @@ function factStats(list) {
   return st;
 }
 function dailyItems(list) {
+  // 12 zadataka (odluka 18. 11.): 4 množenja + 2 dijeljenja iz tablice (slabe prvo), 2 jednadžbe, 2 iz gradiva (miks), 1 desetice/stotice, 1 pisani račun
   const st = factStats(list), facts = [];
   for (let a = 3; a <= 9; a++) for (let b = a; b <= 9; b++) {
     const x = st[factKey(a, b)], med = x && x.ms.length ? median(x.ms) : null;
@@ -367,15 +368,13 @@ function dailyItems(list) {
     facts.push({ a, b, score: score + Math.random() * 0.8 });
   }
   facts.sort((p, q) => q.score - p.score);
-  const pick = facts.slice(0, 8).sort(() => Math.random() - .5), out = [];
-  pick.slice(0, 5).forEach(({ a, b }, i) => { const [x, y] = Math.random() < .5 ? [a, b] : [b, a]; out.push(N("B" + (i + 1), `${x} · ${y}`, x * y)); });
-  pick.slice(5).forEach(({ a, b }, i) => { const [x, y] = Math.random() < .5 ? [a, b] : [b, a]; out.push(N("C" + (i + 1), `${x * y} : ${x}`, y)); });
+  const pick = facts.slice(0, 7).sort(() => Math.random() - .5).slice(0, 6), out = [], dayIdx = Math.floor(Date.now() / 864e5);
+  pick.slice(0, 4).forEach(({ a, b }, i) => { const [x, y] = Math.random() < .5 ? [a, b] : [b, a]; out.push(N("B" + (i + 1), `${x} · ${y}`, x * y)); });
+  pick.slice(4).forEach(({ a, b }, i) => { const [x, y] = Math.random() < .5 ? [a, b] : [b, a]; out.push(N("C" + (i + 1), `${x * y} : ${x}`, y)); });
+  out.push(...equationItems(dayIdx));
   const used = new Set(pick.map(f => factKey(f.a, f.b))), [f1, f2] = factPool(used);
-  out.push(N("D1", `${f1[0] * 10} · ${f1[1]}`, f1[0] * f1[1] * 10, { ladder: [N("D1a", `${f1[0]} · ${f1[1]}`, f1[0] * f1[1])] }));
-  out.push(N("D2", `${spaced(f2[0] * f2[1] * 100)} : ${f2[0] * 10}`, f2[1] * 10, { ladder: [N("D2a", `${f2[0] * f2[1]} : ${f2[0]}`, f2[1])] }));
-  const paid = [20, 50, 100][rnd(0, 2)], price = paid - rnd(3, Math.min(paid - 11, 48)) ;
-  const cost = price % 10 === 0 ? price - 3 : price;
-  out.push(N("E1", `Račun je ${cost} €, platila si ${paid} €. Koliko ti se vraća? (u €)`, paid - cost, { long: true }));
+  out.push(dayIdx % 2 ? N("D1", `${f1[0] * 10} · ${f1[1]}`, f1[0] * f1[1] * 10) : N("D1", `${spaced(f2[0] * f2[1] * 100)} : ${f2[0] * 10}`, f2[1] * 10));
+  out.push(...topicItems(dayIdx));
   const m = rnd(112, 489), d = rnd(3, 9);
   out.push(N("P1", `${m} · ${d}`, m * d, { hint: "Pisani račun: riješi na papiru, upiši samo rezultat." }));
   return out;
@@ -411,8 +410,8 @@ const oneStep = g => !g || g.steps.length <= 1 ? g : { tip: g.tip, steps: [{ say
 /* Ploča za pisane račune (18. 11.): mreža znamenki kao u bilježnici, pomoćni računi „Sa strane” (unutar iste slike),
    pribrajanje iznad znamenke, crte, strelice za spuštanje i strelice od pomoćnog računa do mjesta u glavnom računu.
    Svaki mikrokorak je jedna snimka ploče; oblačić s objašnjenjem stoji na mjestu radnje. */
-function Board() {
-  const st = { cells: {}, carries: {}, rules: [], arrows: [], side: [], focus: [], links: [] }; let seq = 0; const steps = [];
+function Board(opt = {}) {
+  const st = { cells: {}, carries: {}, rules: [], arrows: [], side: [], focus: [], links: [], W: opt.W || 22 }; let seq = 0; const steps = [];
   const mark = o => (o.n = ++seq, o);
   return {
     put(r, c, str, cls) { [...String(str)].forEach((ch, i) => { if (ch !== " ") st.cells[r + "," + (c + i)] = mark({ r, c: c + i, t: ch, cls }); }); },
@@ -431,10 +430,12 @@ function Board() {
     steps };
 }
 function renderBoard(step, mask) {
-  const b = JSON.parse(JSON.stringify(step.board)), isNew = o => o.n > step.since, W = 22, H = 36, PADT = 16, CW = 9.2, LH = 24;
+  const b = JSON.parse(JSON.stringify(step.board)), isNew = o => o.n > step.since, W = b.W || 22, H = 36, PADT = 16, CW = 9.2, LH = 24;
   if (mask) { // pitanje: novo se ne otkriva, na mjestu odgovora stoji „?”
     const ans = String(step.ask.a);
-    for (const x of Object.values(b.cells)) if (isNew(x) && /\d/.test(x.t)) { x.t = "?"; x.cls = "q"; }
+    if (step.ask.options) { for (const k of Object.keys(b.cells)) if (isNew(b.cells[k])) delete b.cells[k]; }
+    const nd = String(ans).replace(/\D/g, "").length || 1;
+    Object.values(b.cells).filter(x => isNew(x) && /\d/.test(x.t)).sort((p, q) => p.r - q.r || p.c - q.c).slice(-nd).forEach(x => { x.t = "?"; x.cls = "q"; });
     for (const x of Object.values(b.carries)) if (isNew(x)) x.t = "?";
     b.side = b.side.filter(x => !isNew(x) || x.t.trim().endsWith(ans)).map(x => isNew(x) ? { ...x, t: x.t.trim().slice(0, -ans.length) + "?" } : x);
     b.links = [];
@@ -595,9 +596,164 @@ function divGuide(N, d) {
   }
   return { tip: `Za svaku znamenku pitaj se koliko puta ${d} stane. Sjeti se tablice množenja sa ${d}.`, steps: B.steps };
 }
+/* ---------- jednadžbe i trenutno gradivo (odluka 18. 11.) ----------
+   Jednadžbe vezom računskih operacija, kao u udžbeniku (Matematički izazovi 5, str. 70–83):
+   što je nepoznato → kako ga dobijemo → izračunaj → provjera. Dio s x koji nije sam x je „kućica”. */
+const EQ_ROLE = {
+  pribrojnik: { rule: "a + x = b → x = b − a", say: "nepoznati pribrojnik = zbroj − poznati pribrojnik" },
+  umanjenik: { rule: "x − a = b → x = b + a", say: "umanjenik = razlika + umanjitelj" },
+  umanjitelj: { rule: "a − x = b → x = a − b", say: "umanjitelj = umanjenik − razlika" },
+  faktor: { rule: "a · x = b → x = b : a", say: "nepoznati faktor = umnožak : poznati faktor" },
+  djeljenik: { rule: "x : a = b → x = b · a", say: "djeljenik = količnik · djelitelj" },
+  djelitelj: { rule: "a : x = b → x = a : b", say: "djelitelj = djeljenik : količnik" } };
+const OPS = { "+": "+", "-": "−", "*": "·", "/": ":" };
+const hasX = t => t === "x" || (typeof t === "object" && (hasX(t.l) || hasX(t.r)));
+const evalT = (t, x) => t === "x" ? x : typeof t === "number" ? t : (o => o === "+" ? evalT(t.l, x) + evalT(t.r, x) : o === "-" ? evalT(t.l, x) - evalT(t.r, x) : o === "*" ? evalT(t.l, x) * evalT(t.r, x) : evalT(t.l, x) / evalT(t.r, x))(t.op);
+function fmtT(t, parentOp, isRight) {
+  if (t === "x") return "x"; if (typeof t === "number") return spaced(t);
+  const s = `${fmtT(t.l, t.op, false)} ${OPS[t.op]} ${fmtT(t.r, t.op, true)}`;
+  const low = t.op === "+" || t.op === "-";
+  const need = parentOp && ((low && (parentOp === "*" || parentOp === "/")) || (isRight && (parentOp === "-" || parentOp === "/")) || (parentOp === "/" && !isRight && t.op === "/"));
+  return need ? `(${s})` : s;
+}
+function eqGuide(lhs, rhs) {
+  const B = Board({ W: 14 }), x = (() => { for (let v = 0; v <= 100000; v++) if (evalT(lhs, v) === rhs) return v; return null; })();
+  let row = 0, cur = lhs, val = rhs;
+  const line0 = `${fmtT(lhs)} = ${spaced(rhs)}`; B.put(0, 0, line0);
+  B.snap(`Riješimo jednadžbu. Tražimo broj x za koji je jednakost istinita.`);
+  while (cur !== "x") {
+    const curStr = `${fmtT(cur)} = ${spaced(val)}`;
+    const xLeft = hasX(cur.l), k = xLeft ? cur.l : cur.r, other = xLeft ? cur.r : cur.l, kStr = fmtT(k, cur.op, !xLeft);
+    const kStart = xLeft ? 0 : curStr.indexOf(" " + OPS[cur.op] + " ") + 3, kEnd = kStart + kStr.length - 1;
+    if (k !== "x") { B.focus(row, kStart, kEnd); B.snap(`Dio ${kStr} sadrži x. Gledamo ga kao jednu nepoznanicu, „kućicu”.`); }
+    const o = typeof other === "number" ? other : evalT(other, 0);
+    let role, res, good, bad;
+    if (cur.op === "+") { role = "pribrojnik"; res = val - o; good = `${spaced(val)} − ${spaced(o)}`; bad = `${spaced(val)} + ${spaced(o)}`; }
+    else if (cur.op === "-" && xLeft) { role = "umanjenik"; res = val + o; good = `${spaced(val)} + ${spaced(o)}`; bad = `${spaced(val)} − ${spaced(o)}`; }
+    else if (cur.op === "-") { role = "umanjitelj"; res = o - val; good = `${spaced(o)} − ${spaced(val)}`; bad = `${spaced(o)} + ${spaced(val)}`; }
+    else if (cur.op === "*") { role = "faktor"; res = val / o; good = `${spaced(val)} : ${spaced(o)}`; bad = `${spaced(val)} · ${spaced(o)}`; }
+    else if (xLeft) { role = "djeljenik"; res = val * o; good = `${spaced(val)} · ${spaced(o)}`; bad = `${spaced(val)} : ${spaced(o)}`; }
+    else { role = "djelitelj"; res = o / val; good = `${spaced(o)} : ${spaced(val)}`; bad = `${spaced(o)} · ${spaced(val)}`; }
+    const roleOpts = cur.op === "+" ? ["pribrojnik", "umanjenik", "faktor"] : cur.op === "-" ? ["umanjenik", "umanjitelj", "pribrojnik"] : ["faktor", "djeljenik", "djelitelj"];
+    const kname = k === "x" ? "x" : `kućica ${kStr}`, kPlain = fmtT(k);
+    B.focus(row, kStart, kEnd);
+    const rn = B.side(EQ_ROLE[role].rule);
+    B.snap(`${k === "x" ? "x" : kStr} je nepoznati ${role}. Pravilo: ${EQ_ROLE[role].say}.`, { q: `Što je ${kname} u ovoj jednadžbi? Nepoznati…`, a: role, options: roleOpts });
+    const r1 = `${kPlain} = ${good}`; B.put(row + 1, 0, r1); B.link(rn, EQ_ROLE[role].rule.indexOf("→") + 2, EQ_ROLE[role].rule.length - 1, row + 1, kPlain.length + 3, r1.length - 1);
+    B.snap(`Po pravilu: ${r1}.`, { q: `Kako dobijemo ${k === "x" ? "x" : kStr}?`, a: good, options: Math.random() < .5 ? [good, bad] : [bad, good] });
+    const r2 = `${kPlain} = ${spaced(res)}`; B.put(row + 2, 0, r2); B.clearSide();
+    B.snap(`${good} = ${spaced(res)}.`, { q: `${good} = ?`, a: res });
+    row += 2; cur = k; val = res;
+  }
+  // provjera: uvrsti x u početnu jednadžbu
+  const chk = fmtT(lhs).replace(/x/g, spaced(x)), rowC = row + 2;
+  B.put(rowC, 0, `${chk} = ${spaced(rhs)}`); B.side("Provjera: uvrsti x", "ttl");
+  B.snap(`Provjera: uvrstimo x = ${spaced(x)}. ${chk} = ${spaced(rhs)}, pa je x = ${spaced(x)} točno.`, { q: `Provjera: ${chk} = ?`, a: rhs });
+  return { tip: `Pitaj se: što je x (pribrojnik, umanjenik, umanjitelj, faktor, djeljenik, djelitelj) i kako ga dobijemo?`, steps: B.steps };
+}
+function eqItem(id, lhs, rhs, extra = {}) { return N(id, `${fmtT(lhs)} = ${spaced(rhs)}\nx = ?`, (() => { for (let v = 0; v <= 100000; v++) if (evalT(lhs, v) === rhs) return v; })(), { long: true, spec: { kind: "eq", lhs, rhs }, ...extra }); }
+function equationItems(dayIdx) {
+  const f = () => [rnd(3, 9), rnd(3, 9)], out = [];
+  const one = [
+    () => { const a = rnd(120, 480), x = rnd(110, 499); return eqItem("I1", { op: "+", l: "x", r: a }, a + x); },
+    () => { const a = rnd(25, 99), x = rnd(30, 99); return eqItem("I1", { op: "+", l: a, r: "x" }, a + x); },
+    () => { const a = rnd(40, 300), b = rnd(40, 300); return eqItem("I1", { op: "-", l: "x", r: a }, b); },
+    () => { const x = rnd(30, 200), b = rnd(20, 300); return eqItem("I1", { op: "-", l: x + b, r: "x" }, b); },
+    () => { const [a, x] = f(); return eqItem("I1", { op: "*", l: a, r: "x" }, a * x); },
+    () => { const [a, b] = f(); return eqItem("I1", { op: "/", l: "x", r: a }, b); },
+    () => { const [a, b] = f(); return eqItem("I1", { op: "/", l: a * b, r: "x" }, b); } ];
+  const two = [
+    () => { const [a, x] = f(), b = rnd(3, 19); return eqItem("I2", { op: "+", l: { op: "*", l: a, r: "x" }, r: b }, a * x + b); },
+    () => { const [a, x] = f(), b = rnd(3, 19); return eqItem("I2", { op: "-", l: { op: "*", l: a, r: "x" }, r: b }, a * x - b); },
+    () => { const [a, q] = f(), c = rnd(3, 9); return eqItem("I2", { op: "/", l: a * q * c, r: { op: "/", l: "x", r: a } }, c); },
+    () => { const [a, q] = f(), b = rnd(5, 30); return eqItem("I2", { op: "+", l: { op: "/", l: "x", r: a }, r: b }, q + b); } ];
+  out.push(one[(dayIdx + rnd(0, 6)) % one.length]());
+  out.push(dayIdx % 2 ? two[rnd(0, two.length - 1)]() : (() => { let it; do { it = one[rnd(0, one.length - 1)](); } while (it.prompt === out[0].prompt); it.id = "I2"; return it; })());
+  return out;
+}
+/* Trenutno gradivo: Mjerenje i uvod u algebru (prioritet dok roditelj ne javi lekciju iz škole). */
+function convGuide(big, small, k, a, b, unitBig, unitSmall, note) {
+  const B = Board({ W: 14 }), line = `${a} ${unitBig} ${b} ${unitSmall} = ? ${unitSmall}`;
+  B.put(0, 0, line); const sn = B.side(note);
+  B.snap(`Veću jedinicu pretvaramo u manju: pomnožimo pretvornikom. ${note}.`);
+  const r1 = `${a} ${unitBig} = ${a} · ${k} ${unitSmall}`; B.put(1, 0, r1); B.link(sn, 0, note.length - 1, 1, r1.indexOf("·") + 2, r1.indexOf("·") + 1 + String(k).length);
+  B.snap(`${a} ${unitBig} je ${a} puta ${k} ${unitSmall}.`);
+  const r2 = `${a} · ${k} = ${a * k}`; B.put(2, 0, r2); B.snap(`${a} · ${k} = ${a * k} ${unitSmall}.`, { q: `${a} · ${k} = ?`, a: a * k });
+  const r3 = `${a * k} + ${b} = ${a * k + b}`; B.put(3, 0, r3); B.snap(`Dodamo još ${b} ${unitSmall}: ${a * k} + ${b} = ${a * k + b} ${unitSmall}.`, { q: `${a * k} + ${b} = ?`, a: a * k + b });
+  return { tip: `Šalabahter: ${note}. Pomnoži pa dodaj.`, steps: B.steps };
+}
+function exprGuide(a, ch, b, v) {
+  const B = Board({ W: 14 }), line = `${a} · ${ch} + ${b}, za ${ch} = ${v}`; B.put(0, 0, line);
+  B.snap(`1. korak: slovo zamijeni brojem. 2. korak: izračunaj.`);
+  const r1 = `${a} · ${v} + ${b}`, wrong = `${a}${v} + ${b}`; B.put(1, 0, r1); B.focus(0, 0, `${a} · ${ch}`.length - 1);
+  B.snap(`Umjesto ${ch} pišemo ${v}: ${r1}.`, { q: `Kako izgleda izraz kad ${ch} zamijenimo s ${v}?`, a: r1, options: Math.random() < .5 ? [r1, wrong] : [wrong, r1] });
+  const r2 = `= ${a * v} + ${b}`; B.put(2, 0, r2); B.snap(`Prvo množenje: ${a} · ${v} = ${a * v}.`, { q: `${a} · ${v} = ?`, a: a * v });
+  const r3 = `= ${a * v + b}`; B.put(3, 0, r3); B.snap(`Zatim zbrajanje: ${a * v} + ${b} = ${a * v + b}.`, { q: `${a * v} + ${b} = ?`, a: a * v + b });
+  return { tip: `Prvo zamijeni ${ch} s ${v}, pa prvo množi, zatim zbrajaj.`, steps: B.steps };
+}
+function sqSumGuide(a, b) {
+  const B = Board({ W: 14 }); B.put(0, 0, `${a}² + ${b}²`); B.snap(`Kvadrirati znači pomnožiti broj samim sobom.`);
+  B.put(1, 0, `${a}² = ${a} · ${a} = ${a * a}`); B.snap(`${a}² = ${a} · ${a} = ${a * a}.`, { q: `${a}² = ${a} · ${a} = ?`, a: a * a });
+  B.put(2, 0, `${b}² = ${b} · ${b} = ${b * b}`); B.snap(`${b}² = ${b} · ${b} = ${b * b}.`, { q: `${b}² = ${b} · ${b} = ?`, a: b * b });
+  B.put(3, 0, `${a * a} + ${b * b} = ${a * a + b * b}`); B.snap(`Zbrojimo: ${a * a} + ${b * b} = ${a * a + b * b}.`, { q: `${a * a} + ${b * b} = ?`, a: a * a + b * b });
+  return { tip: `Kvadrat je broj puta isti broj: ${a}² = ${a} · ${a}.`, steps: B.steps };
+}
+function ineqGuide(a, c) {
+  const q = Math.ceil(c / a) - 1, B = Board({ W: 14 }); B.put(0, 0, `${a} · x < ${c}`);
+  B.snap(`Tražimo najveći x. Uvrštavamo brojeve i provjeravamo je li nejednakost istinita.`);
+  B.put(1, 0, `x = ${q}: ${a} · ${q} = ${a * q} < ${c}`); B.snap(`Za x = ${q}: ${a} · ${q} = ${a * q}, a ${a * q} < ${c}. Istina!`, { q: `x = ${q}: ${a} · ${q} = ?`, a: a * q });
+  B.put(2, 0, `x = ${q + 1}: ${a} · ${q + 1} = ${a * (q + 1)} < ${c} ?`); B.snap(`Za x = ${q + 1}: ${a} · ${q + 1} = ${a * (q + 1)}, a to nije manje od ${c}. Ne vrijedi.`, { q: `x = ${q + 1}: ${a} · ${q + 1} = ?`, a: a * (q + 1) });
+  B.put(3, 0, `Najveći x je ${q}.`); B.snap(`Najveći x za koji vrijedi ${a} · x < ${c} je ${q}.`, { q: `Koji je najveći x?`, a: q });
+  return { tip: `Uvrsti nekoliko brojeva: za koji je ${a} · x još manje od ${c}?`, steps: B.steps };
+}
+function topicItems(dayIdx) {
+  const T = [
+    () => { const a = rnd(2, 5), b = rnd(5, 55); return N("E1", `${a} h ${b} min = ? min`, a * 60 + b, { long: true, spec: { kind: "conv", a, b, k: 60, ub: "h", us: "min", note: "1 h = 60 min" } }); },
+    () => { const a = rnd(2, 6), b = rnd(5, 95); return N("E2", `${a} kg ${b} dag = ? dag`, a * 100 + b, { long: true, spec: { kind: "conv", a, b, k: 100, ub: "kg", us: "dag", note: "1 kg = 100 dag" } }); },
+    () => { const a = rnd(3, 9), b = rnd(2, 15), v = rnd(3, 9), ch = "abcdmn"[rnd(0, 5)]; return N("G1", `Vrijednost izraza ${a} · ${ch} + ${b} za ${ch} = ${v}`, a * v + b, { long: true, spec: { kind: "expr", a, b, v, ch } }); },
+    () => { const a = rnd(2, 9); let b; do { b = rnd(2, 9); } while (b === a); return N("H1", `${a}² + ${b}²`, a * a + b * b, { spec: { kind: "sq", a, b } }); },
+    () => { const a = rnd(3, 9), c = a * rnd(3, 9) + rnd(1, a - 1); return N("J1", `Koji je najveći prirodni broj x za koji vrijedi ${a} · x < ${c}?`, Math.ceil(c / a) - 1, { long: true, spec: { kind: "ineq", a, c } }); },
+    () => { const paid = [20, 50, 100][rnd(0, 2)], cost = paid - rnd(3, Math.min(paid - 11, 48)); return N("E3", `Račun je ${cost % 10 ? cost : cost - 3} €, platila si ${paid} €. Koliko ti se vraća? (u €)`, paid - (cost % 10 ? cost : cost - 3), { long: true }); } ];
+  // miks (odluka 18. 11.): jedan iz Mjerenja i algebre, jedan iz Prirodnih brojeva (trenutno gradivo)
+  return [T[(dayIdx + rnd(0, T.length - 1)) % T.length](), currentTopics[rnd(0, currentTopics.length - 1)]()];
+}
+function specGuide(sp) {
+  if (sp.kind === "eq") return eqGuide(sp.lhs, sp.rhs);
+  if (sp.kind === "conv") return convGuide(0, 0, sp.k, sp.a, sp.b, sp.ub, sp.us, sp.note);
+  if (sp.kind === "expr") return exprGuide(sp.a, sp.ch, sp.b, sp.v);
+  if (sp.kind === "sq") return sqSumGuide(sp.a, sp.b);
+  if (sp.kind === "ineq") return ineqGuide(sp.a, sp.c);
+  if (sp.kind === "round") return roundGuide(sp.n, sp.pi);
+  if (sp.kind === "succ") { const r = sp.succ ? sp.n + 1 : sp.n - 1; return { tip: sp.succ ? "Sljedbenik je broj veći za 1." : "Prethodnik je broj manji za 1.", steps: [{ say: `${sp.succ ? "Sljedbenik" : "Prethodnik"} je broj ${sp.succ ? "veći" : "manji"} za 1: ${spaced(sp.n)} ${sp.succ ? "+" : "−"} 1 = ${spaced(r)}.`, work: [`${spaced(sp.n)} ${sp.succ ? "+" : "−"} 1 = ${spaced(r)}`] }] }; }
+  if (sp.kind === "cmp") { const A = String(sp.a), Bs = String(sp.b); let i = 0; if (A.length === Bs.length) while (A[i] === Bs[i]) i++;
+    return { tip: "Prvo usporedi broj znamenki, a zatim znamenke slijeva, jednu po jednu.", steps: [{ say: A.length !== Bs.length ? `Broj s više znamenki je veći.` : `Usporedi znamenke slijeva. Prva različita je na ${i + 1}. mjestu: ${A[i]} i ${Bs[i]}.`, work: [`${spaced(sp.a)} ${sp.a < sp.b ? "<" : ">"} ${spaced(sp.b)}`] }] }; }
+  return null;
+}
+/* Trenutno gradivo iz cjeline Prirodni brojevi (str. 96–123): prethodnik i sljedbenik, uspoređivanje, zaokruživanje. */
+const PLACES = [["jedinice", 1], ["desetice", 10], ["stotice", 100], ["tisućice", 1000]];
+function roundGuide(n, pi) {
+  const [pname, p] = PLACES[pi], s = String(n), L = s.length, ci = L - 1 - pi, nd = +s[ci + 1], up = nd >= 5;
+  const res = Math.round(n / p) * p, B = Board();
+  B.put(0, 0, s); B.snap(`Zaokružujemo ${spaced(n)} na ${pname}.`);
+  B.focus(0, ci, ci); B.snap(`Znamenka ${pname} je ${s[ci]}.`, { q: `Koja je znamenka ${pname}?`, a: +s[ci] });
+  B.focus(0, ci + 1, ci + 1); B.snap(`Gledamo prvu znamenku desno od nje: ${nd}.`, { q: `Koja je znamenka desno od nje?`, a: nd });
+  const sn = B.side(up ? `${nd} ≥ 5 → zaokružujemo na više` : `${nd} < 5 → zaokružujemo na manje`);
+  B.focus(0, ci + 1, ci + 1); B.snap(up ? `${nd} je 5 ili više, pa zaokružujemo na više.` : `${nd} je manje od 5, pa zaokružujemo na manje.`, { q: `Zaokružujemo na više ili na manje?`, a: up ? "na više" : "na manje", options: ["na više", "na manje"] });
+  B.put(1, 0, String(res).padStart(L, " ")); B.link(sn, 0, 0, 1, 0, L - 1);
+  B.snap(`Desno od ${pname} pišemo nule. ${spaced(n)} ≈ ${spaced(res)}.`, { q: `${spaced(n)} zaokruženo na ${pname} je?`, a: res });
+  return { tip: `Pogledaj znamenku desno od ${pname}: ako je 5 ili više, zaokružuješ na više.`, steps: B.steps };
+}
+const currentTopics = [
+  () => { const n = [rnd(1000, 9998), rnd(10, 99) * 1000 - 1, rnd(1, 9) * 10000][rnd(0, 2)], succ = Math.random() < .5;
+    return N("K1", `${succ ? "Sljedbenik" : "Prethodnik"} broja ${spaced(n)} je?`, succ ? n + 1 : n - 1, { long: true, spec: { kind: "succ", n, succ } }); },
+  () => { const a = rnd(10000, 99999); let b = a + [rnd(-90, 90), rnd(-900, 900) * 10, Number(String(a).split("").reverse().join("")) - a][rnd(0, 2)]; if (b === a || b < 1000) b = a + 10;
+    return C("K2", `Usporedi: ${spaced(a)} ? ${spaced(b)}`, a < b ? "<" : ">", ["<", ">", "="], { long: true, spec: { kind: "cmp", a, b } }); },
+  () => { const n = rnd(1050, 9949), pi = rnd(1, 2); return N("K3", `Zaokruži ${spaced(n)} na ${PLACES[pi][0]}.`, Math.round(n / PLACES[pi][1]) * PLACES[pi][1], { long: true, spec: { kind: "round", n, pi } }); } ];
+
 function guideFor(it) { const g = guideFor0(it); return g && g.steps.some(x => x.board) ? g : oneStep(g); }
 function guideFor0(it) {
   if (it.guide) return it.guide;
+  if (it.spec) return specGuide(it.spec);
   const t = String(it.prompt).replace(/ /g, " ");
   let m;
   if ((m = t.match(/^(\d{3,}) · (\d)$/))) return mulGuide(+m[1], +m[2]);
@@ -829,7 +985,7 @@ function home() {
   else {
     const isBonus = p.mode === "bonus", isDaily = p.mode === "daily";
     const title = isBonus ? "Subotnji bonus" : isDaily ? "Dnevna vježba" : `Dan ${p.day} od ${DAYS.length}`;
-    const sub = isBonus ? "Pet zadataka iz tablice množenja. Nije obavezno, ali donosi zrno." : isDaily ? "Tablica, dijeljenje, desetice, novac i jedan pisani račun." : DAYS[p.day - 1].title;
+    const sub = isBonus ? "Pet zadataka iz tablice množenja. Nije obavezno, ali donosi zrno." : isDaily ? "Tablica, jednadžbe, gradivo iz škole i jedan pisani račun." : DAYS[p.day - 1].title;
     const n = isBonus ? 5 : isDaily ? 12 : DAYS[p.day - 1].items.length;
     main = `<div class="card"><p class="label">${esc(title)}</p><h2>${esc(sub)}</h2><p class="muted">${n} zadataka</p>
       <ul class="rules"><li>Uzmi papir i tamnu olovku. Računaj na papiru, ovdje upiši samo rezultat.</li><li>Svaki zadatak piši u svom dijelu stranice.</li><li>Ako zapneš, upiši rezultat koji misliš da je točan. Ako je krivo, dobit ćeš kratko pitanje koje pomaže.</li></ul>
@@ -957,11 +1113,12 @@ function showGuide(it, g, i = 0, note) {
   const view = note ? { ...st, say: note + " " + st.say } : st;
   const work = (st.work || []).map((l, j) => `<span class="${j === st.work.length - 1 ? "new" : ""}">${esc(l)}</span>`).join("\n");
   shell(`<div class="card"><div class="taskhead"><span class="ladder-tag">Riješimo zajedno</span><span class="small muted">Korak ${i + 1} od ${g.steps.length}</span></div>
-    <p class="label">${esc(String(it.prompt).replace(/\n/g, " "))}</p>
+    <p class="small muted">${esc(String(it.prompt).replace(/\n/g, " "))}</p>
     ${st.board ? renderBoard(view, asking) : `<div class="guide-work">${work}</div>`}
     <p class="guide-say${st.board ? " sr" : ""}" aria-live="polite">${esc(asking ? st.ask.q : view.say)}</p>
-    ${asking ? `<div class="guide-ask"><input class="answer" id="gIn" inputmode="numeric" autocomplete="off" aria-label="${esc(st.ask.q)}" placeholder="?">
-      <div class="guide-nav"><button class="btn ghost" id="gShow">Pokaži mi</button><button class="btn" id="gCheck" disabled>Provjeri</button></div></div>` : ""}
+    ${asking ? (st.ask.options ? `<div class="guide-ask"><div class="choices">${st.ask.options.map((o, j) => `<button class="choice" data-gopt="${esc(o)}">${esc(o)}</button>`).join("")}</div><button class="btn ghost" id="gShow">Pokaži mi</button></div>`
+      : `<div class="guide-ask"><input class="answer" id="gIn" inputmode="numeric" autocomplete="off" aria-label="${esc(st.ask.q)}" placeholder="?">
+      <div class="guide-nav"><button class="btn ghost" id="gShow">Pokaži mi</button><button class="btn" id="gCheck" disabled>Provjeri</button></div></div>`) : ""}
     ${last && !asking ? `<p><b>Rješenje: ${esc(it.answer)}</b></p>` : ""}
     <div class="guide-dots" aria-hidden="true">${g.steps.map((_, j) => `<i class="${j <= i ? "on" : ""}"></i>`).join("")}</div>
     ${asking ? `<div class="guide-nav"><button class="btn ghost" id="gBack" ${i === 0 ? "disabled" : ""}>Natrag</button><span></span></div>`
@@ -969,13 +1126,15 @@ function showGuide(it, g, i = 0, note) {
   const leave = () => { log.stepMs[i] = (log.stepMs[i] || 0) + Math.round(performance.now() - shownAt); };
   $("#gBack").onclick = () => { leave(); showGuide(it, g, i - 1); };
   if (asking) {
-    const inp = $("#gIn"), chk = $("#gCheck"); inp.focus();
+    const inp = $("#gIn"), chk = $("#gCheck");
     const answer = (given, showed) => { leave(); const ok = !showed && norm(given) === norm(st.ask.a);
       g._ans[i] = { ok, showed }; log.asks.push({ step: i, q: st.ask.q, a: String(st.ask.a), given: showed ? null : given, ok, showed }); saveSession(run.s);
       showGuide(it, g, i, ok ? "Točno!" : showed ? "" : `Ne baš, točno je ${st.ask.a}.`); };
-    inp.oninput = () => { chk.disabled = !inp.value.trim(); };
-    inp.onkeydown = e => { if (e.key === "Enter" && inp.value.trim()) answer(inp.value.trim(), false); };
-    chk.onclick = () => answer(inp.value.trim(), false);
+    if (inp) { inp.focus();
+      inp.oninput = () => { chk.disabled = !inp.value.trim(); };
+      inp.onkeydown = e => { if (e.key === "Enter" && inp.value.trim()) answer(inp.value.trim(), false); };
+      chk.onclick = () => answer(inp.value.trim(), false); }
+    app.querySelectorAll("[data-gopt]").forEach(bt => bt.onclick = () => answer(bt.dataset.gopt, false));
     $("#gShow").onclick = () => answer(null, true);
   } else $("#gNext").onclick = () => { leave(); if (!last) return showGuide(it, g, i + 1);
     log.done = new Date().toISOString(); saveSession(run.s);
