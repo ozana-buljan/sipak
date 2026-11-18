@@ -94,6 +94,16 @@ a { color: var(--garnet); }
 .board .bd { font: 700 21px ui-monospace, "SF Mono", Menlo, monospace; fill: var(--ink); }
 .board .nw { fill: var(--garnet); }
 .board .cy { font: 700 14px ui-monospace, Menlo, monospace; fill: var(--warn); }
+.board .sbox { fill: var(--card); stroke: var(--line); }
+.board .slabel { font: 700 10px var(--f-body); letter-spacing: .08em; fill: var(--muted); }
+.board .st { font: 600 15px ui-monospace, "SF Mono", Menlo, monospace; fill: var(--ink); white-space: pre; }
+.board .st.nw { fill: var(--garnet); }
+.board .st.mem { fill: var(--warn); }
+.board .st.no { fill: var(--muted); text-decoration: line-through; }
+.board .st.ttl { fill: var(--muted); }
+.board .shl { fill: var(--seed-soft); stroke: var(--garnet); stroke-width: 1.5; }
+.board .lead { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 2 3; }
+.board .lk { fill: none; stroke: var(--garnet); stroke-width: 2.2; }
 .board .rl { stroke: var(--ink); stroke-width: 2; }
 .board .rl.nw { stroke: var(--garnet); }
 .board .ar { fill: none; stroke: var(--garnet); stroke-width: 2; stroke-dasharray: 4 3; }
@@ -411,10 +421,11 @@ function divFactGuide(c, a) {
 /* Pisani računi po udžbeniku (Moj sretni broj 4, str. 90 i 120): „Govorimo i pišemo”.
    Množenje: od jedinica, „… pišemo, … pribrajamo”; dvoznamenkasti faktor: prvo znamenka desetica, drugi umnožak jedno mjesto udesno.
    Dijeljenje: za svaku znamenku procjena („približno”), izvedena iz oslonca · 5 i koracima po jedan. */
-/* Ploča za pisane račune: mreža znamenki (kao kvadratići u bilježnici), pribrajanje iznad znamenke i sa strane,
-   crte ispod umnoška, strelice za spuštanje znamenke. Svaki mikrokorak je jedna snimka ploče. */
+/* Ploča za pisane račune (18. 11.): mreža znamenki kao u bilježnici, pomoćni računi „Sa strane” (unutar iste slike),
+   pribrajanje iznad znamenke, crte, strelice za spuštanje i strelice od pomoćnog računa do mjesta u glavnom računu.
+   Svaki mikrokorak je jedna snimka ploče; oblačić s objašnjenjem stoji na mjestu radnje. */
 function Board() {
-  const st = { cells: {}, carries: {}, rules: [], arrows: [], side: [], focus: [] }; let seq = 0; const steps = [];
+  const st = { cells: {}, carries: {}, rules: [], arrows: [], side: [], focus: [], links: [] }; let seq = 0; const steps = [];
   const mark = o => (o.n = ++seq, o);
   return {
     put(r, c, str, cls) { [...String(str)].forEach((ch, i) => { if (ch !== " ") st.cells[r + "," + (c + i)] = mark({ r, c: c + i, t: ch, cls }); }); },
@@ -423,40 +434,65 @@ function Board() {
     clearCarries() { st.carries = {}; },
     rule(r, c1, c2) { st.rules.push(mark({ r, c1, c2 })); },
     arrow(c, r1, r2) { st.arrows.push(mark({ c, r1, r2 })); },
-    side(t, cls) { st.side.push(mark({ t, cls })); },
+    side(t, cls) { const o = mark({ t, cls }); st.side.push(o); return o.n; },
     clearSide() { st.side = []; },
     focus(r, c1, c2) { st.focus.push({ r, c1, c2 }); },
-    snap(say) { steps.push({ say, board: JSON.parse(JSON.stringify(st)), since: steps.length ? steps[steps.length - 1].upto : 0, upto: seq }); st.focus = []; },
+    // strelica od dijela pomoćnog računa (znakovi a..b) do ćelije (r, c1..c2) ili do mjesta za „pamtimo” iznad znamenke
+    link(sideN, a, b, r, c1, c2, carry) { st.links.push({ sideN, a, b, r, c1, c2: c2 == null ? c1 : c2, carry: !!carry }); },
+    lastSide() { return st.side.length ? st.side[st.side.length - 1] : null; },
+    snap(say) { steps.push({ say, board: JSON.parse(JSON.stringify(st)), since: steps.length ? steps[steps.length - 1].upto : 0, upto: seq }); st.focus = []; st.links = []; },
     steps };
 }
 function renderBoard(step) {
-  const b = step.board, isNew = o => o.n > step.since, W = 22, H = 36, PADT = 16;
+  const b = step.board, isNew = o => o.n > step.since, W = 22, H = 36, PADT = 16, CW = 9.2, LH = 24;
   const cells = Object.values(b.cells), all = [...cells, ...Object.values(b.carries)];
   const cols = Math.max(...all.map(x => x.c), ...b.rules.map(x => x.c2)) + 1, rows = Math.max(...all.map(x => x.r), ...b.arrows.map(x => x.r2)) + 1;
-  const X = c => c * W + W / 2, Y = r => PADT + r * H + H * 0.68, VW = cols * W, VH = PADT + (rows + 1.7) * H;
+  const X = c => c * W + W / 2, Y = r => PADT + r * H + H * 0.68;
+  const gridH = PADT + rows * H, BAND = 92, SX = 8, sideTop = gridH + BAND, sideW = b.side.length ? Math.max(...b.side.map(s => s.t.length)) * CW + 20 : 0;
+  const SY = i => sideTop + 42 + i * LH;
+  const sideBottom = b.side.length ? sideTop + 34 + b.side.length * LH : gridH;
+  const VW = Math.max(cols * W, SX + sideW + 4), VH = sideBottom + 86;
   let svg = `<svg class="board" viewBox="0 0 ${VW} ${VH}" width="${VW}" role="img" aria-label="Pisani račun">`;
-  svg += `<defs><marker id="ah" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--garnet)"/></marker></defs>`;
+  svg += `<defs><marker id="ah" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--garnet)"/></marker></defs>`;
   for (const f of b.focus) svg += `<rect x="${f.c1 * W + 1}" y="${PADT + f.r * H + 3}" width="${(f.c2 - f.c1 + 1) * W - 2}" height="${H - 6}" rx="7" fill="var(--warn-soft)" stroke="var(--warn)" stroke-width="1.5"/>`;
+  // pomoćni računi sa strane
+  if (b.side.length) {
+    svg += `<rect x="${SX - 4}" y="${sideTop}" width="${sideW}" height="${sideBottom - sideTop}" rx="10" class="sbox"/><text x="${SX + 6}" y="${sideTop + 16}" class="slabel">SA STRANE</text>`;
+    b.side.forEach((s, i) => {
+      const lk = b.links.find(l => l.sideN === s.n), y = SY(i);
+      if (lk) svg += `<rect x="${SX + 6 + lk.a * CW - 2}" y="${y - 16}" width="${(lk.b - lk.a + 1) * CW + 4}" height="21" rx="5" class="shl"/>`;
+      svg += `<text x="${SX + 6}" y="${y}" class="st${isNew(s) ? " nw" : ""}${s.cls ? " " + s.cls : ""}">${esc(s.t)}</text>`;
+    });
+  }
   for (const x of cells) svg += `<text x="${X(x.c)}" y="${Y(x.r)}" text-anchor="middle" class="bd${isNew(x) ? " nw" : ""}${x.cls ? " " + x.cls : ""}">${esc(x.t)}</text>`;
   for (const x of Object.values(b.carries)) svg += `<text x="${X(x.c) + 7}" y="${PADT + x.r * H + 4}" text-anchor="middle" class="cy${isNew(x) ? " nw" : ""}">${esc(x.t)}</text>`;
   for (const l of b.rules) svg += `<line x1="${l.c1 * W + 2}" x2="${(l.c2 + 1) * W - 2}" y1="${PADT + (l.r + 1) * H - 4}" y2="${PADT + (l.r + 1) * H - 4}" class="rl${isNew(l) ? " nw" : ""}"/>`;
   for (const a of b.arrows) svg += `<path d="M${X(a.c) + 9} ${PADT + a.r1 * H + H * 0.8} C ${X(a.c) + 22} ${PADT + a.r1 * H + H * 1.4}, ${X(a.c) + 22} ${PADT + a.r2 * H - H * 0.2}, ${X(a.c) + 9} ${PADT + a.r2 * H + H * 0.15}" class="ar${isNew(a) ? " nw" : ""}" marker-end="url(#ah)"/>`;
-  svg += `</svg>`;
-  // oblačić s objašnjenjem na mjestu gdje se događa
-  const fresh = [...cells, ...b.rules, ...b.arrows].filter(isNew).sort((p, q) => q.n - p.n)[0];
-  const sideNew = b.side.filter(isNew).sort((p, q) => q.n - p.n)[0];
-  const useSide = sideNew && (!fresh || sideNew.n > fresh.n);
-  let ax, ay;
-  if (!useSide) {
-    if (fresh && fresh.t !== undefined) { ax = X(fresh.c); ay = PADT + (fresh.r + 1) * H; }
-    else if (fresh && fresh.c1 !== undefined) { ax = (fresh.c1 + fresh.c2 + 1) * W / 2; ay = PADT + (fresh.r + 1) * H; }
-    else if (fresh) { ax = X(fresh.c); ay = PADT + (fresh.r2 + 1) * H; }
-    else if (b.focus.length) { const f = b.focus[b.focus.length - 1]; ax = (f.c1 + f.c2 + 1) * W / 2; ay = PADT + (f.r + 1) * H; }
-    else { ax = VW / 2; ay = PADT + rows * H; }
+  // strelice od pomoćnog računa do glavnog računa
+  for (const lk of b.links) {
+    const i = b.side.findIndex(s => s.n === lk.sideN); if (i < 0) continue;
+    const x1 = SX + 6 + ((lk.a + lk.b + 1) / 2) * CW, y1 = SY(i) - 17;
+    const tx = (lk.c1 + lk.c2 + 1) * W / 2 + (lk.carry ? 7 : 0), ty = lk.carry ? PADT + lk.r * H + 8 : PADT + (lk.r + 1) * H - 2;
+    const my = Math.min(y1, ty) + Math.abs(y1 - ty) * 0.5, bend = tx > x1 ? 30 : -30;
+    svg += `<path d="M${x1} ${y1} C ${x1 + bend} ${my}, ${tx + bend} ${ty + 30}, ${tx} ${ty + 2}" class="lk" marker-end="url(#ah)"/>`;
   }
-  const bub = t => `<div class="bubble" style="left:${Math.min(80, Math.max(20, ax / VW * 100))}%;top:${ay / VH * 100}%"><i style="left:${Math.min(95, Math.max(5, 50 + (ax / VW * 100 - Math.min(80, Math.max(20, ax / VW * 100)))))}%"></i>${esc(t)}</div>`;
-  const side = b.side.length ? `<div class="board-side"><p class="label">Sa strane</p>${b.side.map(s => `<p class="${isNew(s) ? "nw" : ""}${s.cls ? " " + s.cls : ""}">${esc(s.t)}</p>${useSide && s === sideNew ? `<div class="bubble inline"><i></i>${esc(step.say)}</div>` : ""}`).join("")}</div>` : "";
-  return `<div class="board-wrap"><div class="board-box">${svg}${useSide ? "" : bub(step.say)}</div>${side}</div>`;
+  svg += `</svg>`;
+  // oblačić: u traci ispod mreže (s tankom crtom do mjesta radnje) ili ispod pomoćnih računa
+  const fresh = [...cells, ...b.rules, ...b.arrows, ...b.side].filter(isNew).sort((p, q) => q.n - p.n)[0];
+  let ax, ay, lane = "grid";
+  const si = fresh ? b.side.indexOf(fresh) : -1;
+  if (b.links.length) { const lk = b.links[b.links.length - 1]; ax = (lk.c1 + lk.c2 + 1) * W / 2 + (lk.carry ? 7 : 0); ay = lk.carry ? PADT + lk.r * H + 8 : PADT + (lk.r + 1) * H - 4; }
+  else if (si >= 0) { lane = "side"; ax = SX + 6 + fresh.t.length * CW / 2; ay = sideBottom; }
+  else if (fresh && fresh.t !== undefined) { ax = X(fresh.c); ay = PADT + (fresh.r + 1) * H - 4; }
+  else if (fresh && fresh.c1 !== undefined) { ax = (fresh.c1 + fresh.c2 + 1) * W / 2; ay = PADT + (fresh.r + 1) * H - 2; }
+  else if (fresh) { ax = X(fresh.c); ay = PADT + (fresh.r2 + 1) * H - 4; }
+  else if (b.focus.length) { const f = b.focus[b.focus.length - 1]; ax = (f.c1 + f.c2 + 1) * W / 2; ay = PADT + (f.r + 1) * H - 3; }
+  else { ax = VW / 2; ay = gridH; }
+  const top = lane === "side" ? sideBottom + 10 : gridH + 10;
+  if (lane === "grid" && top - ay > 14) svg = svg.replace("</svg>", `<line x1="${ax}" y1="${ay}" x2="${ax}" y2="${top}" class="lead"/></svg>`);
+  const lp = Math.min(80, Math.max(20, ax / VW * 100));
+  const bub = `<div class="bubble" style="left:${lp}%;top:${top / VH * 100}%"><i style="left:${Math.min(95, Math.max(5, 50 + (ax / VW * 100 - lp)))}%"></i>${esc(step.say)}</div>`;
+  return `<div class="board-wrap"><div class="board-box">${svg}${bub}</div></div>`;
 }
 const digitsOf = n => String(n).split("").map(Number);
 function mulGuide(m, d) {
@@ -468,30 +504,31 @@ function mulGuide(m, d) {
     const x = md[i], raw = x * d, tot = raw + carry, last = i === 0, col = E - written;
     B.clearSide(); if (carry) B.side(`pamtimo ${carry}`, "mem");
     B.focus(0, i, i); B.focus(0, E, E);
-    B.side(`${d} · ${x} = ${raw}`); B.snap(`${d} · ${x} = ${raw}.`);
-    if (carry) { B.side(`${raw} + ${carry} = ${tot}`); B.focus(0, i, i); B.snap(`Pribrojimo ${carry} koji smo pamtili: ${raw} + ${carry} = ${tot}.`); }
-    if (last) { B.putEnd(1, col, String(tot)); B.snap(`Ovo je zadnja znamenka, pa pišemo cijeli broj ${tot}.`); }
+    let sn = B.side(`${d} · ${x} = ${raw}`), line = `${d} · ${x} = ${raw}`;
+    B.snap(`${d} · ${x} = ${raw}.`);
+    if (carry) { line = `${raw} + ${carry} = ${tot}`; sn = B.side(line); B.focus(0, i, i); B.snap(`Pribrojimo ${carry} koji smo pamtili: ${raw} + ${carry} = ${tot}.`); }
+    if (last) { B.putEnd(1, col, String(tot)); B.link(sn, line.length - String(tot).length, line.length - 1, 1, col - String(tot).length + 1, col); B.snap(`Ovo je zadnja znamenka, pa pišemo cijeli broj ${tot}.`); }
     else {
-      B.put(1, col, String(tot % 10)); B.snap(`${tot % 10} pišemo ispod.`);
-      carry = Math.floor(tot / 10);
-      if (carry) { B.clearCarries(); B.carry(0, i - 1, carry); B.side(`pamtimo ${carry}`, "mem"); B.snap(`${carry} pamtimo. Zapiši ga malo iznad sljedeće znamenke.`); }
-      else { B.clearCarries(); }
+      B.put(1, col, String(tot % 10)); B.link(sn, line.length - 1, line.length - 1, 1, col); B.snap(`${tot % 10} pišemo ispod.`);
+      carry = Math.floor(tot / 10); B.clearCarries();
+      if (carry) { B.carry(0, i - 1, carry); const t = `pamtimo ${carry}`, pn = B.side(t, "mem"); B.link(pn, t.length - String(carry).length, t.length - 1, 0, i - 1, null, true); B.snap(`${carry} pamtimo. Zapiši ga malo iznad sljedeće znamenke.`); }
     }
     written++;
   }
   B.clearCarries(); B.clearSide(); B.snap(`${head} = ${prod}.`);
   return { tip: `Riješi ponovno na papiru, znamenku po znamenku. Ono što pamtiš zapiši malo iznad sljedeće znamenke.`, steps: B.steps };
 }
-function partialRow(B, a, dgt, row, endCol, labelSay) {
+function partialRow(B, a, dgt, row, endCol) {
   const ad = digitsOf(a); let carry = 0;
   for (let i = ad.length - 1; i >= 0; i--) {
     const x = ad[i], raw = x * dgt, tot = raw + carry, last = i === 0, col = endCol - (ad.length - 1 - i);
     B.clearSide(); if (carry) B.side(`pamtimo ${carry}`, "mem");
-    B.side(`${dgt} · ${x} = ${raw}${carry ? `, + ${carry} = ${tot}` : ""}`); B.focus(0, i, i);
-    B.snap(`${labelSay}${dgt} · ${x} = ${raw}${carry ? ` i ${carry} koji pamtimo je ${tot}` : ""}.`); labelSay = "";
-    if (last) { B.putEnd(row, col, String(tot)); B.snap(`Zadnja znamenka: pišemo ${tot}.`); }
-    else { B.put(row, col, String(tot % 10)); carry = Math.floor(tot / 10); B.clearCarries();
-      if (carry) { B.carry(0, i - 1, carry); B.side(`pamtimo ${carry}`, "mem"); B.snap(`${tot % 10} pišemo, ${carry} pamtimo.`); } else B.snap(`${tot % 10} pišemo.`); }
+    const line = `${dgt} · ${x} = ${raw}${carry ? `, + ${carry} = ${tot}` : ""}`, sn = B.side(line); B.focus(0, i, i);
+    B.snap(`${dgt} · ${x} = ${raw}${carry ? ` i ${carry} koji pamtimo je ${tot}` : ""}.`);
+    if (last) { B.putEnd(row, col, String(tot)); B.link(sn, line.length - String(tot).length, line.length - 1, row, col - String(tot).length + 1, col); B.snap(`Zadnja znamenka: pišemo ${tot}.`); }
+    else { B.put(row, col, String(tot % 10)); B.link(sn, line.length - 1, line.length - 1, row, col); B.snap(`${tot % 10} pišemo.`);
+      carry = Math.floor(tot / 10); B.clearCarries();
+      if (carry) { B.carry(0, i - 1, carry); const t = `pamtimo ${carry}`, pn = B.side(t, "mem"); B.link(pn, t.length - 1, t.length - 1, 0, i - 1, null, true); B.snap(`${carry} pamtimo. Zapiši ga iznad sljedeće znamenke.`); } }
   }
   B.clearCarries(); B.clearSide();
 }
@@ -500,24 +537,25 @@ function mul2Guide(a, b) {
   B.put(0, 0, head); B.rule(0, 0, E);
   B.snap(`Prvo množimo znamenkom desetica (${t}), pa znamenkom jedinica (${u}).`);
   B.focus(0, E - 1, E - 1); B.snap(`Počinjemo s ${t}. Taj umnožak pišemo tako da završi ispod znamenke ${t}.`);
-  partialRow(B, a, t, 1, E - 1, "");
+  partialRow(B, a, t, 1, E - 1);
   B.focus(0, E, E); B.snap(`Sad množimo s ${u}. Ovaj umnožak piše se jedno mjesto udesno, da završi ispod znamenke ${u}.`);
-  partialRow(B, a, u, 2, E, "");
-  B.put(2, E - String(p2).length, "+"); B.rule(2, E - String(s).length, E); B.snap(`Sad zbrajamo djelomične umnoške.`);
+  partialRow(B, a, u, 2, E);
+  B.put(2, E - String(p2).length, "+"); B.rule(2, E - String(s).length, E); B.snap(`Sad zbrajamo djelomične umnoške, stupac po stupac zdesna.`);
   const r1 = String(p1) + "0", r2 = String(p2); let carry = 0;
   for (let k = 0; k < String(s).length; k++) {
     const d1 = +(r1[r1.length - 1 - k] || 0), d2 = +(r2[r2.length - 1 - k] || 0), col = E - k, tot = d1 + d2 + carry, lastCol = k === String(s).length - 1;
-    if (k === 0) { B.put(3, col, String(tot % 10)); B.snap(`Desno ispod ${p1} nema ništa, pa spustimo ${d2}.`); carry = 0; continue; }
+    if (k === 0) { B.focus(2, col, col); B.put(3, col, String(tot % 10)); B.snap(`Desno ispod ${p1} nema ništa, pa spustimo ${d2}.`); continue; }
     B.focus(1, col, col); B.focus(2, col, col); B.clearSide();
     const parts = [r1.length > k ? d1 : null, r2.length > k ? d2 : null].filter(x => x !== null);
-    const expr = [...parts, ...(carry ? [carry] : [])].join(" + ");
-    if (!parts.length) { B.putEnd(3, col, String(carry)); B.side(`pamtimo ${carry}`, "mem"); B.snap(`Ovdje nema znamenki, ali pamtimo ${carry}. Pišemo ${carry}.`); break; }
+    if (!parts.length) { B.putEnd(3, col, String(carry)); const tt = `pamtimo ${carry}`, pn = B.side(tt, "mem"); B.link(pn, tt.length - 1, tt.length - 1, 3, col); B.snap(`Ovdje nema znamenki, ali pamtimo ${carry}. Pišemo ${carry}.`); break; }
+    if (parts.length === 1 && !carry) { B.putEnd(3, col, String(parts[0])); B.snap(`Ovdje je samo ${parts[0]}, pa ga spustimo.`); continue; }
     if (carry) B.side(`pamtimo ${carry}`, "mem");
-    B.side(`${expr} = ${tot}`);
-    if (lastCol) { B.putEnd(3, col, String(tot)); B.snap(`${expr} = ${tot}. Pišemo ${tot}.`); break; }
-    B.put(3, col, String(tot % 10)); const c2 = Math.floor(tot / 10);
-    if (c2) B.side(`pamtimo ${c2}`, "mem");
+    const expr = [...parts, ...(carry ? [carry] : [])].join(" + "), line = `${expr} = ${tot}`, sn = B.side(line);
+    if (lastCol) { B.putEnd(3, col, String(tot)); B.link(sn, line.length - String(tot).length, line.length - 1, 3, col - String(tot).length + 1, col); B.snap(`${expr} = ${tot}. Pišemo ${tot}.`); break; }
+    B.put(3, col, String(tot % 10)); B.link(sn, line.length - 1, line.length - 1, 3, col);
+    const c2 = Math.floor(tot / 10);
     B.snap(`${expr} = ${tot}. ${tot % 10} pišemo${c2 ? `, ${c2} pamtimo` : ""}.`);
+    if (c2) { const tt = `pamtimo ${c2}`; B.side(tt, "mem"); }
     carry = c2;
   }
   B.clearSide(); B.snap(`${head} = ${s}.`);
@@ -533,18 +571,24 @@ function divGuide(N, d) {
   else B.snap(`Uzimamo ${cur}.`);
   let row = 0, curStart = 0;
   for (;;) {
-    const qd = Math.floor(cur / d);
+    const qd = Math.floor(cur / d); let pick = null, pickLine = "";
     B.focus(row, curStart, pos); B.side(`${cur} : ${d} ≈ ?`, "ttl"); B.snap(`Koliko puta ${d} stane u ${cur}? Procijenimo.`);
-    if (cur < d) { B.side(`${cur} < ${d} → 0`); B.focus(row, curStart, pos); B.snap(`${cur} je manje od ${d}, pa ${d} stane 0 puta.`); }
-    else if (qd <= 2) { for (let k = 1; k <= 3; k++) { const v = d * k; B.side(`${d} · ${k} = ${v}${v > cur ? "  previše" : ""}`, v > cur ? "no" : ""); B.focus(row, curStart, pos); B.snap(v > cur ? `${v} je više od ${cur}. Previše! Znači ${qd}.` : `${d} · ${k} = ${v}. Još stane.`); if (v > cur) break; } }
-    else if (d * 5 <= cur) { B.side(`${d} · 5 = ${d * 5}`); B.focus(row, curStart, pos); B.snap(`Kreni od ${d} · 5 = ${d * 5}. To još stane u ${cur}.`);
-      for (let k = 6; k <= 10; k++) { const v = d * k; B.side(`${d} · ${k} = ${v}${v > cur ? "  previše" : ""}`, v > cur ? "no" : ""); B.focus(row, curStart, pos); B.snap(v > cur ? `${d} · ${k} = ${v}. Previše! Znači ${qd}.` : `Dodaj još jedan ${d}: ${d} · ${k} = ${v}. Još stane.`); if (v > cur) break; } }
-    else { B.side(`${d} · 5 = ${d * 5}  previše`, "no"); B.focus(row, curStart, pos); B.snap(`Kreni od ${d} · 5 = ${d * 5}. To je previše za ${cur}.`);
-      for (let k = 4; k >= 0; k--) { const v = d * k; B.side(`${d} · ${k} = ${v}${v > cur ? "  previše" : ""}`, v > cur ? "no" : ""); B.focus(row, curStart, pos); B.snap(v > cur ? `Oduzmi jedan ${d}: ${d} · ${k} = ${v}. I dalje previše.` : `Oduzmi jedan ${d}: ${d} · ${k} = ${v}. Stane! Znači ${qd}.`); if (v <= cur) break; } }
-    B.put(0, qc + qn++, String(qd)); B.snap(`Pišemo ${qd} u rezultat.`);
-    const pr = qd * d, rem = cur - pr; B.clearSide();
+    const tryLine = (k, txt, say) => { const v = d * k, over = v > cur; const n = B.side(txt + (over ? "  previše" : ""), over ? "no" : ""); if (k === qd) { pick = n; pickLine = txt; } B.focus(row, curStart, pos); B.snap(say(v, over)); return over; };
+    if (cur < d) { const t = `${cur} < ${d}, znači 0`; pick = B.side(t); pickLine = t; B.focus(row, curStart, pos); B.snap(`${cur} je manje od ${d}, pa ${d} stane 0 puta.`); }
+    else if (qd <= 2) { for (let k = 1; k <= 3; k++) if (tryLine(k, `${d} · ${k} = ${d * k}`, (v, o) => o ? `${v} je više od ${cur}. Previše! Znači ${qd}.` : `${d} · ${k} = ${v}. Još stane.`)) break; }
+    else if (d * 5 <= cur) { if (!tryLine(5, `${d} · 5 = ${d * 5}`, v => `Kreni od ${d} · 5 = ${v}. To još stane u ${cur}.`))
+      for (let k = 6; k <= 10; k++) if (tryLine(k, `${d} · ${k} = ${d * (k - 1)} + ${d} = ${d * k}`, (v, o) => o ? `${d} · ${k} = ${v}. Previše! Znači ${qd}.` : `Dodaj još jedan ${d}: ${d} · ${k} = ${v}. Još stane.`)) break; }
+    else { tryLine(5, `${d} · 5 = ${d * 5}`, v => `Kreni od ${d} · 5 = ${v}. To je previše za ${cur}.`);
+      for (let k = 4; k >= 0; k--) if (!tryLine(k, `${d} · ${k} = ${d * (k + 1)} − ${d} = ${d * k}`, (v, o) => o ? `Oduzmi jedan ${d}: ${d} · ${k} = ${v}. I dalje previše.` : `Oduzmi jedan ${d}: ${d} · ${k} = ${v}. Stane! Znači ${qd}.`)) break; }
+    // znamenka rezultata: strelica od izabranog retka (množitelj) do rezultata
+    const qcol = qc + qn++; B.put(0, qcol, String(qd));
+    if (pick != null) { const m = pickLine.match(/· (\d+)/); if (m) { const a = pickLine.indexOf(m[0]) + 2; B.link(pick, a, a + m[1].length - 1, 0, qcol); } else B.link(pick, pickLine.length - 1, pickLine.length - 1, 0, qcol); }
+    B.snap(`Pišemo ${qd} u rezultat.`);
+    const pr = qd * d, rem = cur - pr;
     B.putEnd(row + 1, pos, String(pr)); B.put(row + 1, pos - String(pr).length, "-"); B.rule(row + 1, pos - String(pr).length, pos);
+    if (pick != null && cur >= d) { const e = pickLine.length - 1; B.link(pick, e - String(pr).length + 1, e, row + 1, pos - String(pr).length + 1, pos); }
     B.snap(`${qd} · ${d} = ${pr}. Potpisujemo ${pr} ispod ${cur}.`);
+    B.clearSide();
     B.putEnd(row + 2, pos, String(rem)); B.snap(`${cur} − ${pr} = ${rem}.`);
     if (pos === L - 1) { B.snap(`Nema više znamenki za spustiti. Ostatak je ${rem}. Rezultat: ${ds} : ${d} = ${q}${rem ? `, ostatak ${rem}` : ""}.`); break; }
     pos++; B.put(row + 2, pos, ds[pos]); B.arrow(pos, 0, row + 2); B.snap(`Spuštamo sljedeću znamenku, ${ds[pos]}, pored ostatka. Sad imamo ${rem * 10 + +ds[pos]}.`);
